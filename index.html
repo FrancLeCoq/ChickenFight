@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0d0520">
+  <meta name="description" content="ChickenFight — le jeu de combat tactique de Francis Le Coq dans Telegram.">
+  <title>Francis Le Coq — ChickenFight</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <main class="app" id="app">
+    <header class="topbar">
+      <button class="icon-btn hidden" id="backBtn" type="button" aria-label="Retour">←</button>
+      <div class="topbar-title">
+        <span class="mini-brand">🐓 CHICKENFIGHT</span>
+        <span class="screen-caption" id="screenCaption"></span>
+      </div>
+      <button class="icon-btn" id="soundBtn" type="button" aria-label="Activer ou désactiver le son">🔊</button>
+    </header>
+
+    <section class="screen active" id="screen-menu" data-screen="menu">
+      <div class="brand-block">
+        <img src="assets/francis-default.webp" class="brand-rooster" alt="Francis Le Coq">
+        <div class="brand-copy">
+          <p class="eyebrow">FRANCIS LE COQ</p>
+          <h1>CHICKEN<br>FIGHT</h1>
+          <p class="tagline" data-i18n="tagline">Entraîne ton coq. Défie le poulailler. Deviens champion.</p>
+        </div>
+      </div>
+
+      <div class="card menu-card">
+        <button class="menu-btn free" type="button" data-open-mode="training">
+          <span class="menu-ico">🥊</span>
+          <span class="menu-text"><b data-i18n="training">ENTRAÎNEMENT</b><small data-i18n="trainingSub">Combat gratuit contre le Valet</small></span>
+          <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
+        </button>
+
+        <button class="menu-btn premium" type="button" data-open-mode="campaign">
+          <span class="menu-ico">👑</span>
+          <span class="menu-text"><b data-i18n="campaign">CAMPAGNE ROYALE</b><small data-i18n="campaignSub">Valet, Reine puis Roi</small></span>
+          <span class="access-lock" data-lock-for="campaign"></span>
+        </button>
+
+        <button class="menu-btn premium" type="button" data-open-mode="arena">
+          <span class="menu-ico">🏆</span>
+          <span class="menu-text"><b data-i18n="arena">ARÈNE CLASSÉE</b><small data-i18n="arenaSub">Grimpe dans le classement local</small></span>
+          <span class="access-lock" data-lock-for="arena"></span>
+        </button>
+
+        <button class="menu-btn premium" type="button" data-open-mode="duel">
+          <span class="menu-ico">⚔️</span>
+          <span class="menu-text"><b data-i18n="duel">DUEL LOCAL</b><small data-i18n="duelSub">Deux joueurs, un téléphone</small></span>
+          <span class="access-lock" data-lock-for="duel"></span>
+        </button>
+
+        <button class="menu-btn secondary" type="button" id="profileBtn">
+          <span class="menu-ico">📊</span>
+          <span class="menu-text"><b data-i18n="profile">MON COQ</b><small data-i18n="profileSub">Progression, trophées et statistiques</small></span>
+          <span class="chevron">›</span>
+        </button>
+
+        <button class="menu-btn wallet" type="button" id="walletBtn">
+          <span class="menu-ico">👛</span>
+          <span class="menu-text"><b>CONNECT WALLET</b><small id="walletSub">Non connecté</small></span>
+          <span class="access-lock" id="walletLock"></span>
+        </button>
+
+        <div class="status-bar no-franc" id="statusBar"></div>
+
+        <div class="lang-row" aria-label="Langue">
+          <button class="flag-btn" id="flagFr" type="button" aria-label="Français"><span>🇫🇷</span></button>
+          <button class="flag-btn" id="flagEn" type="button" aria-label="English"><span>🇬🇧</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-campaign" data-screen="campaign">
+      <div class="section-head">
+        <p class="eyebrow" data-i18n="holderMode">MODE HOLDER</p>
+        <h2 data-i18n="campaign">CAMPAGNE ROYALE</h2>
+        <p data-i18n="campaignIntro">Bats la cour royale et récupère ses combattants.</p>
+      </div>
+      <div class="campaign-map" id="campaignMap"></div>
+    </section>
+
+    <section class="screen" id="screen-arena" data-screen="arena">
+      <div class="section-head">
+        <p class="eyebrow" data-i18n="holderMode">MODE HOLDER</p>
+        <h2 data-i18n="arena">ARÈNE CLASSÉE</h2>
+        <p data-i18n="arenaIntro">Choisis ton combattant et affronte une IA qui devient plus forte avec ton rang.</p>
+      </div>
+      <div class="rank-card card">
+        <div><span data-i18n="rating">COTE</span><strong id="ratingValue">1000</strong></div>
+        <div><span data-i18n="league">LIGUE</span><strong id="leagueValue">Bronze</strong></div>
+        <div><span data-i18n="streak">SÉRIE</span><strong id="streakValue">0</strong></div>
+      </div>
+      <div class="roster-grid" id="arenaRoster"></div>
+      <button class="primary-action" id="arenaFightBtn" type="button" disabled data-i18n="enterArena">ENTRER DANS L’ARÈNE</button>
+    </section>
+
+    <section class="screen" id="screen-duel" data-screen="duel">
+      <div class="section-head">
+        <p class="eyebrow" data-i18n="holderMode">MODE HOLDER</p>
+        <h2 data-i18n="duel">DUEL LOCAL</h2>
+        <p data-i18n="duelIntro">Chaque joueur choisit son coq puis ses actions en secret.</p>
+      </div>
+      <div class="duel-pickers">
+        <div class="card picker-card">
+          <h3><span data-i18n="player">JOUEUR</span> 1</h3>
+          <div class="mini-roster" id="duelRoster1"></div>
+        </div>
+        <div class="versus-badge">VS</div>
+        <div class="card picker-card">
+          <h3><span data-i18n="player">JOUEUR</span> 2</h3>
+          <div class="mini-roster" id="duelRoster2"></div>
+        </div>
+      </div>
+      <button class="primary-action" id="duelStartBtn" type="button" disabled data-i18n="startDuel">COMMENCER LE DUEL</button>
+    </section>
+
+    <section class="screen" id="screen-profile" data-screen="profile">
+      <div class="profile-hero card">
+        <img src="assets/francis-default.webp" alt="Francis Le Coq">
+        <div>
+          <span class="level-chip"><span data-i18n="level">NIVEAU</span> <b id="profileLevel">1</b></span>
+          <h2 id="profileTitle">Coq débutant</h2>
+          <div class="xp-track"><span id="xpFill"></span></div>
+          <small id="xpText">0 / 100 XP</small>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="metric-card"><span data-i18n="wins">VICTOIRES</span><b id="statWins">0</b></div>
+        <div class="metric-card"><span data-i18n="losses">DÉFAITES</span><b id="statLosses">0</b></div>
+        <div class="metric-card"><span data-i18n="rating">COTE</span><b id="statRating">1000</b></div>
+        <div class="metric-card"><span data-i18n="feathers">PLUMES</span><b id="statFeathers">0</b></div>
+      </div>
+      <div class="card achievements-card">
+        <h3 data-i18n="achievements">TROPHÉES</h3>
+        <div class="achievement-grid" id="achievementGrid"></div>
+      </div>
+      <div class="card rules-card">
+        <h3 data-i18n="howToPlay">COMMENT JOUER ?</h3>
+        <div class="rules-list" id="rulesList"></div>
+      </div>
+    </section>
+
+    <section class="screen battle-screen" id="screen-battle" data-screen="battle">
+      <div class="battle-header">
+        <span class="mode-badge" id="battleModeBadge">ENTRAÎNEMENT</span>
+        <span class="round-badge"><span data-i18n="round">TOUR</span> <b id="roundValue">1</b>/15</span>
+      </div>
+
+      <div class="arena-stage" id="arenaStage">
+        <div class="crowd crowd-back">🐔 🐥 🐔 🐥 🐔 🐥 🐔</div>
+        <div class="fighter-side player-side" id="playerSide">
+          <div class="fighter-name"><span id="playerName">Francis</span><small id="playerPassive"></small></div>
+          <div class="bar health"><span id="playerHpFill"></span><b id="playerHpText">100/100</b></div>
+          <div class="bar energy"><span id="playerEnergyFill"></span><b id="playerEnergyText">0⚡</b></div>
+          <div class="bar special"><span id="playerSpecialFill"></span><b id="playerSpecialText">0%</b></div>
+          <div class="fighter-wrap">
+            <img id="playerImg" src="assets/francis-default.webp" alt="Combattant du joueur">
+            <span class="effect-bubble" id="playerEffect"></span>
+          </div>
+        </div>
+
+        <div class="arena-center">
+          <span class="vs-mark">VS</span>
+          <div class="battle-log" id="battleLog" aria-live="polite"></div>
+        </div>
+
+        <div class="fighter-side enemy-side" id="enemySide">
+          <div class="fighter-name"><span id="enemyName">Valet</span><small id="enemyPassive"></small></div>
+          <div class="bar health"><span id="enemyHpFill"></span><b id="enemyHpText">92/92</b></div>
+          <div class="bar energy"><span id="enemyEnergyFill"></span><b id="enemyEnergyText">0⚡</b></div>
+          <div class="bar special"><span id="enemySpecialFill"></span><b id="enemySpecialText">0%</b></div>
+          <div class="fighter-wrap">
+            <img id="enemyImg" src="assets/valet.webp" alt="Combattant adverse">
+            <span class="effect-bubble" id="enemyEffect"></span>
+          </div>
+        </div>
+        <div class="arena-floor"></div>
+      </div>
+
+      <div class="turn-prompt" id="turnPrompt" data-i18n="chooseAction">CHOISIS TON ACTION</div>
+      <div class="action-grid" id="actionGrid"></div>
+      <button class="quit-link" id="quitBattleBtn" type="button" data-i18n="quitFight">Abandonner le combat</button>
+    </section>
+  </main>
+
+  <div class="overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal" id="modalContent" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="overlay pass-overlay" id="passOverlay" aria-hidden="true">
+    <div class="modal pass-card">
+      <div class="pass-icon">🙈</div>
+      <h2 id="passTitle">Passe le téléphone</h2>
+      <p id="passText">Joueur 2, ne regarde pas le choix du Joueur 1.</p>
+      <button class="primary-action" id="passReadyBtn" type="button">JE SUIS PRÊT</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <div class="confetti" id="confetti"></div>
+
+  <script src="js/app.js" defer></script>
+</body>
+</html>
