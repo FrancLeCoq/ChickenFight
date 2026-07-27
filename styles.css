@@ -143,23 +143,50 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 .arena-stage{height:430px;position:relative;overflow:hidden;border-radius:22px;border:2px solid rgba(255,213,74,.23);background:
   radial-gradient(circle at 50% 15%,rgba(255,213,74,.18),transparent 35%),
   linear-gradient(#33205a 0 46%,#57331c 46% 100%);
-  box-shadow:var(--shadow);display:grid;grid-template-columns:1fr 68px 1fr;align-items:end;padding:10px 6px 36px}
+  box-shadow:var(--shadow);display:grid;grid-template-columns:1fr 68px 1fr;align-items:end;padding:10px 6px 36px;will-change:transform}
 .arena-stage::before{content:"";position:absolute;left:0;right:0;top:41%;height:12%;background:repeating-linear-gradient(90deg,#84532e 0 13px,#6b3f20 13px 26px);border-top:4px solid #bb7a3e;border-bottom:4px solid #bb7a3e;opacity:.76}
-.crowd{position:absolute;top:32%;left:0;right:0;text-align:center;letter-spacing:6px;font-size:16px;opacity:.76;white-space:nowrap;overflow:hidden}
+.stage-lights{position:absolute;inset:0;pointer-events:none;z-index:1;background:
+  radial-gradient(circle at 22% 4%,rgba(255,255,255,.16),transparent 26%),
+  radial-gradient(circle at 78% 4%,rgba(255,255,255,.16),transparent 26%);
+  mix-blend-mode:screen;animation:lightPulse 3.4s ease-in-out infinite}
+@keyframes lightPulse{50%{opacity:.55}}
+.crowd{position:absolute;left:0;right:0;text-align:center;letter-spacing:6px;white-space:nowrap;overflow:hidden;pointer-events:none}
+.crowd-far{top:25%;font-size:11px;opacity:.4;animation:crowdWave 1.9s ease-in-out infinite}
+.crowd-back{top:31%;font-size:16px;opacity:.76;animation:crowdWave 1.5s ease-in-out infinite .3s}
+@keyframes crowdWave{50%{transform:translateY(-4px)}}
 .arena-floor{position:absolute;left:-10%;right:-10%;bottom:-48px;height:140px;background:radial-gradient(ellipse at center,#96602f 0,#543018 70%);border-radius:50%;border-top:3px solid rgba(255,213,74,.2)}
+.battle-announce{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(.4);z-index:8;font-family:"Bangers",cursive;font-size:52px;letter-spacing:2px;color:var(--gold);text-shadow:0 4px 0 #6b3f00,0 0 26px rgba(255,213,74,.6);opacity:0;pointer-events:none;white-space:nowrap}
+.battle-announce.show{animation:announcePop 1.1s cubic-bezier(.2,1.4,.4,1)}
+.battle-announce.ko{color:#ff5252;text-shadow:0 4px 0 #6b0000,0 0 30px rgba(239,68,68,.7);font-size:60px}
+.battle-announce.fight{color:#ffd54a}
+@keyframes announcePop{0%{opacity:0;transform:translate(-50%,-50%) scale(.35) rotate(-6deg)}22%{opacity:1;transform:translate(-50%,-50%) scale(1.12) rotate(2deg)}40%{transform:translate(-50%,-50%) scale(1) rotate(0)}80%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.25)}}
+.arena-stage.shake{animation:stageShake .36s ease}
+.arena-stage.shake-hard{animation:stageShakeHard .52s ease}
+@keyframes stageShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-5px,3px)}40%{transform:translate(5px,-2px)}60%{transform:translate(-4px,-3px)}80%{transform:translate(3px,2px)}}
+@keyframes stageShakeHard{0%,100%{transform:translate(0,0)}10%{transform:translate(-9px,5px) rotate(-.6deg)}30%{transform:translate(10px,-4px) rotate(.6deg)}50%{transform:translate(-8px,6px) rotate(-.4deg)}70%{transform:translate(7px,-5px) rotate(.4deg)}90%{transform:translate(-4px,3px)}}
 .fighter-side{height:100%;position:relative;z-index:2;display:flex;flex-direction:column;justify-content:flex-start;min-width:0}
 .fighter-name{text-align:center;display:flex;flex-direction:column;margin-bottom:4px;line-height:1}
 .fighter-name span{font-family:"Bangers",cursive;color:var(--gold);font-size:17px;letter-spacing:.7px}
 .fighter-name small{font-size:7px;color:var(--muted);min-height:9px}
 .bar{height:15px;border-radius:999px;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.14);position:relative;overflow:hidden;margin-bottom:3px}
-.bar span{height:100%;display:block;width:0;transition:width .38s ease}
-.bar b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:7px;text-shadow:0 1px 2px #000}
+.bar span{height:100%;display:block;width:0;transition:width .28s ease;position:relative;z-index:2}
+.bar span::after{content:"";position:absolute;inset:0 0 auto 0;height:45%;background:linear-gradient(rgba(255,255,255,.35),transparent);border-radius:999px}
+.bar .ghost{position:absolute;left:0;top:0;height:100%;width:0;z-index:1;background:linear-gradient(90deg,#fca5a5,#ef4444);transition:width .55s ease .28s}
+.bar b{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;font-size:7px;text-shadow:0 1px 2px #000}
 .health span{background:linear-gradient(90deg,#22c55e,#84cc16)}
+.fighter-side.low-hp .health span{background:linear-gradient(90deg,#f97316,#ef4444);animation:hpPulse .8s ease-in-out infinite}
+@keyframes hpPulse{50%{filter:brightness(1.4)}}
 .energy span{background:linear-gradient(90deg,#0284c7,#38bdf8)}
 .special span{background:linear-gradient(90deg,#7c3aed,#f59e0b)}
 .fighter-wrap{position:relative;flex:1;display:flex;align-items:flex-end;justify-content:center;min-height:0}
-.fighter-wrap img{max-width:150%;width:170px;height:295px;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 14px 11px rgba(0,0,0,.5));transform-origin:50% 85%}
-.enemy-side .fighter-wrap img{transform:scaleX(-1)}
+.sprite{position:relative;display:flex;align-items:flex-end;justify-content:center;height:100%}
+.enemy-side .sprite{transform:scaleX(-1)}
+.sprite-shadow{position:absolute;bottom:6px;left:50%;width:118px;height:20px;transform:translateX(-50%);background:radial-gradient(ellipse at center,rgba(0,0,0,.55),transparent 72%);border-radius:50%;z-index:1;animation:shadowBreath 2.6s ease-in-out infinite}
+@keyframes shadowBreath{50%{transform:translateX(-50%) scale(.82);opacity:.7}}
+.fighter-wrap img{max-width:150%;width:170px;height:295px;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 14px 11px rgba(0,0,0,.5));transform-origin:50% 88%;animation:idleStance 2.6s ease-in-out infinite;position:relative;z-index:2}
+.enemy-side .fighter-wrap img{animation-delay:-1.15s}
+@keyframes idleStance{0%,100%{transform:translateY(0) scaleY(1) rotate(0)}30%{transform:translateY(-5px) scaleY(1.02) rotate(-1deg)}70%{transform:translateY(-2px) scaleY(1.01) rotate(1deg)}}
+.fighter-side.low-hp .fighter-wrap img{animation-duration:1.3s;filter:drop-shadow(0 14px 11px rgba(0,0,0,.5)) drop-shadow(0 0 12px rgba(239,68,68,.45))}
 .effect-bubble{position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);font-family:"Bangers",cursive;font-size:23px;color:#fff;text-shadow:0 2px 4px #000;opacity:0;pointer-events:none;white-space:nowrap}
 .effect-bubble.show{animation:floatEffect .7s ease}
 @keyframes floatEffect{0%{opacity:0;transform:translate(-50%,0) scale(.7)}30%{opacity:1}100%{opacity:0;transform:translate(-50%,-52px) scale(1.15)}}
@@ -181,18 +208,33 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 .action-copy small{font-size:7.5px;color:rgba(255,255,255,.72);line-height:1.15;display:block}
 .action-cost{font-size:8px;color:var(--gold);white-space:nowrap}
 .quit-link{display:block;margin:10px auto 0;border:0;background:transparent;color:#d8b4fe;font-size:10px;text-decoration:underline;cursor:pointer}
-.fighter-side.attacking img{animation:attack .48s ease}
-.enemy-side.attacking img{animation:attackEnemy .48s ease}
-.fighter-side.hit img{animation:hit .5s ease}
+/* Fighting-game choreography — positive X always means "toward the opponent"
+   because the enemy sprite is mirrored on its parent, not on the image. */
+.fighter-side.attacking img,
+.fighter-side.pecking img{animation:peck .46s ease}
+.fighter-side.winging img{animation:wingSlash .64s ease}
+.fighter-side.feinting img{animation:feint .5s ease}
+.fighter-side.special-attack img{animation:specialLunge .95s cubic-bezier(.3,.9,.3,1)}
+.fighter-side.hit img{animation:hitReact .5s ease}
 .fighter-side.guarding img{animation:guard .55s ease}
 .fighter-side.dodging img{animation:dodge .55s ease}
 .fighter-side.crowing img{animation:crow .75s ease}
-@keyframes attack{40%{transform:translateX(30px) rotate(5deg) scale(1.05)}}
-@keyframes attackEnemy{40%{transform:scaleX(-1) translateX(30px) rotate(5deg) scale(1.05)}}
-@keyframes hit{20%,60%{filter:drop-shadow(0 0 18px #ef4444);transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
-@keyframes guard{50%{filter:drop-shadow(0 0 18px #38bdf8);transform:scale(.95)}}
-@keyframes dodge{50%{transform:translateX(-30px);opacity:.55}}
-@keyframes crow{35%{transform:scale(1.08) rotate(-3deg);filter:drop-shadow(0 0 20px #ffd54a)}}
+@keyframes peck{0%{transform:none}30%{transform:translateX(28px) translateY(2px) rotate(6deg) scale(1.05)}55%{transform:translateX(12px) rotate(2deg)}100%{transform:none}}
+@keyframes wingSlash{0%{transform:none}22%{transform:translateX(-12px) rotate(-9deg) scale(1.03)}55%{transform:translateX(38px) rotate(12deg) scale(1.09);filter:drop-shadow(0 14px 11px rgba(0,0,0,.5)) drop-shadow(-14px 0 10px rgba(56,189,248,.4))}100%{transform:none}}
+@keyframes feint{0%{transform:none}22%{transform:translateX(16px) scaleX(.94)}44%{transform:translateX(-8px) rotate(-3deg)}68%{transform:translateX(24px) rotate(6deg) scale(1.05)}100%{transform:none}}
+@keyframes specialLunge{0%{transform:none}18%{transform:translateX(-22px) scale(1.12) rotate(-6deg);filter:drop-shadow(0 0 26px rgba(255,213,74,.85))}30%{transform:translateX(-26px) scale(1.14)}55%{transform:translateX(46px) scale(1.2) rotate(10deg);filter:drop-shadow(0 0 34px rgba(245,158,11,.95))}72%{transform:translateX(30px) scale(1.08)}100%{transform:none}}
+@keyframes hitReact{0%{transform:none}15%{transform:translateX(-16px) rotate(-6deg);filter:drop-shadow(0 0 22px #ef4444) brightness(1.7)}35%{transform:translateX(-8px) rotate(-2deg)}55%{transform:translateX(-13px);filter:drop-shadow(0 0 16px #ef4444) brightness(1.3)}75%{transform:translateX(-4px)}100%{transform:none}}
+@keyframes guard{0%{transform:none}50%{transform:translateX(-4px) scale(.93);filter:drop-shadow(0 14px 11px rgba(0,0,0,.5)) drop-shadow(0 0 18px #38bdf8)}100%{transform:none}}
+@keyframes dodge{0%{transform:none}45%{transform:translateX(-34px) skewX(8deg);opacity:.5}70%{transform:translateX(-20px);opacity:.85}100%{transform:none}}
+@keyframes crow{0%{transform:none}35%{transform:translateY(-6px) scale(1.09) rotate(-4deg);filter:drop-shadow(0 14px 11px rgba(0,0,0,.5)) drop-shadow(0 0 22px #ffd54a)}60%{transform:translateY(-2px) scale(1.04)}100%{transform:none}}
+.impact-spark{position:absolute;left:50%;bottom:42%;width:70px;height:70px;transform:translate(-50%,50%);z-index:6;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.98),rgba(255,213,74,.7) 38%,transparent 68%);animation:sparkPop .42s ease-out forwards}
+.impact-spark::before,.impact-spark::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent 44%,rgba(255,255,255,.9) 50%,transparent 56%),
+  linear-gradient(0deg,transparent 44%,rgba(255,255,255,.9) 50%,transparent 56%);border-radius:6px}
+.impact-spark::after{transform:rotate(45deg)}
+@keyframes sparkPop{0%{transform:translate(-50%,50%) scale(.2) rotate(8deg);opacity:1}100%{transform:translate(-50%,50%) scale(1.6) rotate(-8deg);opacity:0}}
+.dust-puff{position:absolute;left:50%;bottom:8px;width:54px;height:22px;transform:translateX(-50%);z-index:1;pointer-events:none;background:radial-gradient(ellipse at center,rgba(214,178,120,.6),transparent 70%);border-radius:50%;animation:dustPop .5s ease-out forwards}
+@keyframes dustPop{0%{transform:translateX(-50%) scale(.4);opacity:.75}100%{transform:translateX(-50%) scale(1.7);opacity:0}}
 .overlay{position:fixed;inset:0;z-index:50;background:rgba(4,1,12,.84);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:22px}
 .overlay.show{display:flex;animation:fade .2s ease}
 @keyframes fade{from{opacity:0}}

@@ -161,14 +161,17 @@
       </div>
 
       <div class="arena-stage" id="arenaStage">
-        <div class="crowd crowd-back">🐔 🐥 🐔 🐥 🐔 🐥 🐔</div>
+        <div class="stage-lights"></div>
+        <div class="crowd crowd-far">🐔 🐥 🐔 🐥 🐔 🐥 🐔 🐥 🐔</div>
+        <div class="crowd crowd-back">🐓 🐔 🐥 🐔 🐓 🐔 🐥 🐔</div>
         <div class="fighter-side player-side" id="playerSide">
           <div class="fighter-name"><span id="playerName">Francis</span><small id="playerPassive"></small></div>
-          <div class="bar health"><span id="playerHpFill"></span><b id="playerHpText">100/100</b></div>
+          <div class="bar health"><i class="ghost" id="playerHpGhost"></i><span id="playerHpFill"></span><b id="playerHpText">100/100</b></div>
           <div class="bar energy"><span id="playerEnergyFill"></span><b id="playerEnergyText">0⚡</b></div>
           <div class="bar special"><span id="playerSpecialFill"></span><b id="playerSpecialText">0%</b></div>
           <div class="fighter-wrap">
-            <img id="playerImg" src="assets/francis-default.webp" alt="Combattant du joueur">
+            <div class="sprite-shadow"></div>
+            <div class="sprite"><img id="playerImg" src="assets/francis-default.webp" alt="Combattant du joueur"></div>
             <span class="effect-bubble" id="playerEffect"></span>
           </div>
         </div>
@@ -180,15 +183,17 @@
 
         <div class="fighter-side enemy-side" id="enemySide">
           <div class="fighter-name"><span id="enemyName">Valet</span><small id="enemyPassive"></small></div>
-          <div class="bar health"><span id="enemyHpFill"></span><b id="enemyHpText">92/92</b></div>
+          <div class="bar health"><i class="ghost" id="enemyHpGhost"></i><span id="enemyHpFill"></span><b id="enemyHpText">92/92</b></div>
           <div class="bar energy"><span id="enemyEnergyFill"></span><b id="enemyEnergyText">0⚡</b></div>
           <div class="bar special"><span id="enemySpecialFill"></span><b id="enemySpecialText">0%</b></div>
           <div class="fighter-wrap">
-            <img id="enemyImg" src="assets/valet.webp" alt="Combattant adverse">
+            <div class="sprite-shadow"></div>
+            <div class="sprite"><img id="enemyImg" src="assets/valet.webp" alt="Combattant adverse"></div>
             <span class="effect-bubble" id="enemyEffect"></span>
           </div>
         </div>
         <div class="arena-floor"></div>
+        <div class="battle-announce" id="battleAnnounce"></div>
       </div>
 
       <div class="turn-prompt" id="turnPrompt" data-i18n="chooseAction">CHOISIS TON ACTION</div>
