@@ -30,6 +30,7 @@
       enterArena: 'ENTRER DANS L’ARÈNE', player: 'JOUEUR', startDuel: 'COMMENCER LE DUEL',
       level: 'NIVEAU', wins: 'VICTOIRES', losses: 'DÉFAITES', feathers: 'PLUMES',
       achievements: 'TROPHÉES', howToPlay: 'COMMENT JOUER ?', round: 'TOUR',
+      fightGo: 'COMBAT !', koBanner: 'K.O. !',
       chooseAction: 'CHOISIS TON ACTION', quitFight: 'Abandonner le combat',
       walletConnected: '✅ Connecté', walletNoFranc: '⚠️ Connecté — aucun $FRANC', walletNotConnected: 'Non connecté',
       holderStatus: '<b>Entraînement</b> : gratuit pour tous<br><b>Campagne, Arène, Duel et techniques avancées</b> : réservés aux détenteurs de <b>$FRANC</b>',
@@ -95,6 +96,7 @@
       enterArena: 'ENTER THE ARENA', player: 'PLAYER', startDuel: 'START DUEL',
       level: 'LEVEL', wins: 'WINS', losses: 'LOSSES', feathers: 'FEATHERS',
       achievements: 'TROPHIES', howToPlay: 'HOW TO PLAY?', round: 'ROUND',
+      fightGo: 'FIGHT!', koBanner: 'K.O.!',
       chooseAction: 'CHOOSE YOUR ACTION', quitFight: 'Forfeit the fight',
       walletConnected: '✅ Connected', walletNoFranc: '⚠️ Connected — no $FRANC', walletNotConnected: 'Not connected',
       holderStatus: '<b>Training</b>: free for everyone<br><b>Campaign, Arena, Duel and advanced moves</b>: reserved for <b>$FRANC</b> holders',
@@ -483,6 +485,7 @@
     renderBattle();
     addLog(lang==='fr'?'Le combat commence !':'The fight begins!');
     playSound('start'); haptic('medium');
+    announce(tr('fightGo'),'fight');
     if(config.mode === 'duel') showPass(1,true);
   }
 
@@ -502,12 +505,16 @@
   }
 
   function renderBar(prefix,f){
-    $(`#${prefix}HpFill`).style.width = `${clamp(f.hp/f.maxHp*100,0,100)}%`;
+    const hpPct = clamp(f.hp/f.maxHp*100,0,100);
+    $(`#${prefix}HpFill`).style.width = `${hpPct}%`;
+    const ghost = $(`#${prefix}HpGhost`);
+    if(ghost) ghost.style.width = `${hpPct}%`;
     $(`#${prefix}EnergyFill`).style.width = `${f.energy}%`;
     $(`#${prefix}SpecialFill`).style.width = `${f.special}%`;
     $(`#${prefix}HpText`).textContent = `${Math.max(0,f.hp)}/${f.maxHp}`;
     $(`#${prefix}EnergyText`).textContent = `${f.energy}⚡`;
     $(`#${prefix}SpecialText`).textContent = `${f.special}%`;
+    $(`#${prefix}Side`)?.classList.toggle('low-hp', f.hp > 0 && hpPct < 30);
   }
 
   function currentActor(){
@@ -626,11 +633,19 @@
     if(toEnemy.text) addLog(toEnemy.text);
     if(toPlayer.text) addLog(toPlayer.text);
     renderBattle();
-    if(toEnemy.damage || toPlayer.damage){ playSound('hit'); haptic('heavy'); }
+    if(toEnemy.damage || toPlayer.damage){
+      playSound('hit'); haptic('heavy');
+      const topDamage = Math.max(toEnemy.damage||0, toPlayer.damage||0);
+      const usedSpecial = playerActionId === 'special' || enemyActionId === 'special';
+      shakeStage(usedSpecial || topDamage >= 22 ? 1.6 : 1);
+    }
     await wait(560);
 
     const finished = p.hp <= 0 || e.hp <= 0 || battle.round >= battle.maxRounds;
-    if(finished){ finishBattle(); return; }
+    if(finished){
+      if(p.hp <= 0 || e.hp <= 0){ announce(tr('koBanner'),'ko'); shakeStage(1.6); await wait(820); }
+      finishBattle(); return;
+    }
     battle.round++;
     battle.pendingActions = {};
     battle.busy = false;
@@ -701,13 +716,45 @@
     return {damage,missed:false,blocked,guardBreak,crit,text:extras?`💥 ${extras}`:''};
   }
 
+  const ACTION_ANIM = { guard:'guarding', dodge:'dodging', crow:'crowing', peck:'pecking', wing:'winging', feint:'feinting', special:'special-attack' };
+  const ANIM_DURATION = { 'special-attack':960, winging:650, crowing:760, dodging:560, guarding:560 };
+
   function animateAction(side,action){
     const el = $(`#${side}Side`);
-    const cls = action.id === 'guard' ? 'guarding' : action.id === 'dodge' ? 'dodging' : action.id === 'crow' ? 'crowing' : 'attacking';
-    el.classList.add(cls); setTimeout(()=>el.classList.remove(cls),760);
+    if(!el) return;
+    const cls = ACTION_ANIM[action.id] || 'attacking';
+    ['attacking','guarding','dodging','crowing','pecking','winging','feinting','special-attack']
+      .forEach(c => el.classList.remove(c));
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(()=>el.classList.remove(cls), ANIM_DURATION[cls] || 470);
+    if(action.kind === 'attack') dust(side);
   }
-  function animateHit(side){ const el=$(`#${side}Side`);el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),620); }
+  function animateHit(side){ const el=$(`#${side}Side`);if(!el)return;el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),620);spark(side); }
   function effect(side,text){ const el=$(`#${side}Effect`);el.textContent=text;el.classList.remove('show');void el.offsetWidth;el.classList.add('show'); }
+
+  function shakeStage(power=1){
+    const stage = $('#arenaStage'); if(!stage) return;
+    const cls = power >= 1.5 ? 'shake-hard' : 'shake';
+    stage.classList.remove('shake','shake-hard'); void stage.offsetWidth; stage.classList.add(cls);
+    setTimeout(()=>stage.classList.remove(cls), power >= 1.5 ? 540 : 380);
+  }
+  function spark(side){
+    const wrap = $(`#${side}Side .fighter-wrap`); if(!wrap) return;
+    const s = document.createElement('span'); s.className = 'impact-spark';
+    wrap.appendChild(s); setTimeout(()=>s.remove(),460);
+  }
+  function dust(side){
+    const wrap = $(`#${side}Side .fighter-wrap`); if(!wrap) return;
+    const d = document.createElement('span'); d.className = 'dust-puff';
+    wrap.appendChild(d); setTimeout(()=>d.remove(),520);
+  }
+  function announce(text,tone){
+    const el = $('#battleAnnounce'); if(!el) return;
+    el.textContent = text; el.className = `battle-announce ${tone||''}`;
+    void el.offsetWidth; el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'),1100);
+  }
 
   function addLog(text){
     if(!battle) return;

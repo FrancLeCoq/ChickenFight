@@ -14,6 +14,20 @@ Jeu de combat tactique mobile conçu pour l’univers **Francis Le Coq** et son 
 
 Les actions sont résolues simultanément : coup de bec, garde, Cocorico, aile tranchante, esquive, feinte et attaque spéciale. Les techniques avancées sont réservées aux holders. Le vainqueur apparaît heureux et le perdant pleure.
 
+### Mise en scène « Tekken du poulailler »
+
+Le combat est animé façon jeu de baston pour rester vivant plutôt que statique :
+
+- posture d'attente (idle) : les deux coqs respirent et se balancent en permanence, avec une ombre portée qui pulse ;
+- chorégraphies distinctes par action : le coup de bec pique en avant, l'aile tranchante balaie avec une traînée, la feinte fait un faux pas, le Cocorico Fatal charge puis explose ;
+- réactions à l'impact : recul (knockback), flash rouge, étincelle d'impact et bouffée de poussière au sol ;
+- tremblement d'écran proportionnel aux dégâts (renforcé sur les spéciales et les K.O.) ;
+- barres de vie d'arcade avec « dégât fantôme » qui traîne derrière la barre et pulsation rouge en dessous de 30 % de PV ;
+- bannières animées « COMBAT ! » au lancement et « K.O. ! » à la chute d'un combattant ;
+- scène animée : foule qui ondule et projecteurs qui pulsent.
+
+Toutes ces animations sont désactivées automatiquement si l'utilisateur a activé `prefers-reduced-motion`.
+
 ## Vérification holder
 
 La logique reprend celle des autres jeux Francis Le Coq :
@@ -49,3 +63,8 @@ Le workflow `.github/workflows/pages.yml` publie automatiquement la branche `mai
 ## Limite connue
 
 Le duel inclus dans cette version est un duel local à choix secrets sur un même appareil. Un PvP en ligne temps réel nécessitera un service serveur de matchmaking et de synchronisation des tours.
+
+## Roadmap
+
+- **Combats de coq en ligne** : matchmaking et synchronisation des tours via un service serveur (Supabase Realtime / Edge Functions), en réutilisant le moteur de combat déterministe déjà en place.
+- **Paris en Franc** : système de mise et de gains adossé à `$FRANC`, avec vérification holder existante (`check-franc`) comme base d'authentification wallet.
