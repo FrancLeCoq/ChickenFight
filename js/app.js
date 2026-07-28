@@ -31,6 +31,7 @@
       level: 'NIVEAU', wins: 'VICTOIRES', losses: 'DÉFAITES', feathers: 'PLUMES',
       achievements: 'TROPHÉES', howToPlay: 'COMMENT JOUER ?', round: 'TOUR',
       fightGo: 'COMBAT !', koBanner: 'K.O. !',
+      padDefense: 'Défense · Déplacement', padAttack: 'Attaque',
       chooseAction: 'CHOISIS TON ACTION', quitFight: 'Abandonner le combat',
       walletConnected: '✅ Connecté', walletNoFranc: '⚠️ Connecté — aucun $FRANC', walletNotConnected: 'Non connecté',
       holderStatus: '<b>Entraînement</b> : gratuit pour tous<br><b>Campagne, Arène, Duel et techniques avancées</b> : réservés aux détenteurs de <b>$FRANC</b>',
@@ -65,20 +66,20 @@
         roi: 'Forteresse : garde renforcée'
       },
       actions: {
-        peck: ['COUP DE BEC','Dégâts fiables, recharge les jauges'],
-        guard: ['GARDE','Réduit fortement les dégâts'],
-        crow: ['COCORICO','Recharge et booste la prochaine attaque'],
-        wing: ['AILE TRANCHANTE','Puissante mais moins précise'],
-        dodge: ['ESQUIVE','Peut annuler complètement une attaque'],
-        feint: ['FEINTE','Brise la garde adverse'],
-        special: ['COCORICO FATAL','Attaque ultime, jauge à 100%']
+        peck: ['COUP DE BEC','Piqué rapide et fiable, recharge les jauges'],
+        guard: ['GARDE','Ailes repliées : réduit fortement les dégâts'],
+        crow: ['COCORICO','Gonfle le torse : recharge et booste l’attaque'],
+        wing: ['COUP D’AILE','Déploie les ailes, puissant mais moins précis'],
+        dodge: ['RETOURNÉ','Salto acrobatique qui peut annuler l’attaque'],
+        feint: ['COUP DE PATTE','Coup de griffe qui brise la garde adverse'],
+        special: ['ŒUF EXPLOSIF','Ponte un œuf-bombe sur l’ennemi, jauge à 100%']
       },
       rules: [
-        ['🥊','Attaque','Le coup de bec est sûr. L’aile tranche plus fort mais peut rater.'],
-        ['🛡️','Défense','La garde réduit les dégâts. La feinte détruit une garde.'],
-        ['💨','Esquive','L’esquive peut éviter un coup, mais consomme de l’énergie.'],
+        ['🥊','Attaque','Le coup de bec est sûr. Le coup d’aile frappe plus fort mais peut rater.'],
+        ['🛡️','Défense','La garde réduit les dégâts. Le coup de patte brise une garde.'],
+        ['🤸','Retourné','Le salto acrobatique peut éviter un coup, mais consomme de l’énergie.'],
         ['📣','Cocorico','Recharge les jauges et renforce la prochaine attaque, mais te rend vulnérable.'],
-        ['🔥','Spécial','Remplis la jauge violette pour déclencher le Cocorico Fatal.']
+        ['🥚','Spécial','Remplis la jauge violette pour pondre l’Œuf Explosif sur l’ennemi.']
       ]
     },
     en: {
@@ -97,6 +98,7 @@
       level: 'LEVEL', wins: 'WINS', losses: 'LOSSES', feathers: 'FEATHERS',
       achievements: 'TROPHIES', howToPlay: 'HOW TO PLAY?', round: 'ROUND',
       fightGo: 'FIGHT!', koBanner: 'K.O.!',
+      padDefense: 'Defence · Movement', padAttack: 'Attack',
       chooseAction: 'CHOOSE YOUR ACTION', quitFight: 'Forfeit the fight',
       walletConnected: '✅ Connected', walletNoFranc: '⚠️ Connected — no $FRANC', walletNotConnected: 'Not connected',
       holderStatus: '<b>Training</b>: free for everyone<br><b>Campaign, Arena, Duel and advanced moves</b>: reserved for <b>$FRANC</b> holders',
@@ -131,20 +133,20 @@
         roi: 'Fortress: stronger guard'
       },
       actions: {
-        peck: ['PECK','Reliable damage, charges both meters'],
-        guard: ['GUARD','Greatly reduces incoming damage'],
-        crow: ['COCORICO','Recharge and boost your next attack'],
-        wing: ['WING SLASH','Powerful but less accurate'],
-        dodge: ['DODGE','May completely avoid an attack'],
-        feint: ['FEINT','Breaks the opponent’s guard'],
-        special: ['FATAL COCORICO','Ultimate attack, meter at 100%']
+        peck: ['PECK','Fast reliable jab, charges both meters'],
+        guard: ['GUARD','Wings tucked: greatly reduces damage'],
+        crow: ['COCORICO','Puffs the chest: recharge and boost next hit'],
+        wing: ['WING STRIKE','Wings unfold, powerful but less accurate'],
+        dodge: ['BACKFLIP','Acrobatic flip that may avoid the attack'],
+        feint: ['TALON KICK','A clawed kick that breaks the guard'],
+        special: ['EGG BOMB','Lays an explosive egg on the enemy, meter 100%']
       },
       rules: [
-        ['🥊','Attack','Peck is reliable. Wing Slash hits harder but can miss.'],
-        ['🛡️','Defence','Guard reduces damage. Feint destroys a guard.'],
-        ['💨','Dodge','Dodge may avoid a hit, but costs energy.'],
+        ['🥊','Attack','Peck is reliable. Wing Strike hits harder but can miss.'],
+        ['🛡️','Defence','Guard reduces damage. Talon Kick breaks a guard.'],
+        ['🤸','Backflip','The acrobatic flip may avoid a hit, but costs energy.'],
         ['📣','Cocorico','Recharges meters and boosts your next attack, but leaves you vulnerable.'],
-        ['🔥','Special','Fill the purple meter to unleash Fatal Cocorico.']
+        ['🥚','Special','Fill the purple meter to lay the Egg Bomb on the enemy.']
       ]
     }
   };
@@ -161,9 +163,9 @@
     guard: { id:'guard', icon:'🛡️', category:'defense', cost:0, premium:false, kind:'defense' },
     crow: { id:'crow', icon:'📣', category:'basic', cost:0, premium:false, kind:'support' },
     wing: { id:'wing', icon:'🪽', category:'tactical', cost:25, premium:true, kind:'attack', accuracy:.83, min:17, max:24 },
-    dodge: { id:'dodge', icon:'💨', category:'defense', cost:15, premium:true, kind:'defense' },
-    feint: { id:'feint', icon:'🎭', category:'tactical', cost:15, premium:true, kind:'attack', accuracy:.96, min:7, max:11 },
-    special: { id:'special', icon:'🔥', category:'special', cost:100, premium:false, kind:'attack', accuracy:.92, min:30, max:39 }
+    dodge: { id:'dodge', icon:'🤸', category:'defense', cost:15, premium:true, kind:'defense' },
+    feint: { id:'feint', icon:'🦵', category:'tactical', cost:15, premium:true, kind:'attack', accuracy:.96, min:7, max:11 },
+    special: { id:'special', icon:'🥚', category:'special', cost:100, premium:false, kind:'attack', accuracy:.92, min:30, max:39 }
   };
 
   const ACHIEVEMENTS = {
@@ -257,11 +259,17 @@
           body:JSON.stringify({ initData:tg.initData })
         });
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        walletLinked = !!data?.walletLinked;
-        isHolder = !!(data && (data.unlocked ?? (data.walletLinked && data.hasFranc)));
-        unlockReason = data?.reason || (isHolder ? 'solana' : null);
-        francBalance = isHolder ? Number(data?.balance || 0) : 0;
+        const data = await res.json() || {};
+        // Tolerant parsing: the backend contract may drift across Francis Le Coq
+        // games, so accept the common key variants rather than silently failing.
+        const balance = Number(data.balance ?? data.amount ?? data.franc ?? 0) || 0;
+        const linked = data.walletLinked ?? data.linked ?? data.connected ?? !!(data.wallet || data.address);
+        const hasFranc = data.hasFranc ?? data.hasToken ?? data.owned ?? balance > 0;
+        const unlocked = data.unlocked ?? data.holder ?? data.isHolder ?? data.hasAccess;
+        walletLinked = !!linked;
+        isHolder = !!(unlocked ?? (linked && hasFranc));
+        unlockReason = data.reason || (isHolder ? 'solana' : null);
+        francBalance = isHolder ? balance : 0;
         localStorage.setItem(STORAGE.holder, JSON.stringify(isHolder));
         localStorage.setItem(STORAGE.balance, String(francBalance));
         localStorage.setItem(STORAGE.reason, unlockReason || '');
@@ -271,6 +279,21 @@
       }
     }
     renderAccessState();
+  }
+
+  // Re-read the shared localStorage (written by the wallet page on the same
+  // origin) so a freshly linked wallet is recognized without a hard reload.
+  function reloadCachedAccess(){
+    isHolder = safeJson(localStorage.getItem(STORAGE.holder), isHolder);
+    francBalance = Number(localStorage.getItem(STORAGE.balance) || francBalance || 0);
+    unlockReason = localStorage.getItem(STORAGE.reason) || unlockReason;
+    walletLinked = safeJson(localStorage.getItem(STORAGE.walletLinked), walletLinked);
+  }
+
+  function refreshAccess(){
+    reloadCachedAccess();
+    renderAccessState();
+    if(tg?.initData) detectHolder();
   }
 
   function renderAccessState(){
@@ -523,26 +546,56 @@
     return battle.chooser === 1 ? battle.player : battle.enemy;
   }
 
+  const PAD_SHORT = { peck:'BEC', wing:'AILE', feint:'PATTE', crow:'COCORICO', guard:'GARDE', dodge:'RETOURNÉ', special:'ŒUF EXPLOSIF' };
+
+  function padButton(id, extraClass){
+    const action = ACTIONS[id];
+    const actor = currentActor();
+    const premiumLocked = action.premium && !isHolder;
+    const freeDodge = actor.id==='valet' && id==='dodge' && actor.firstDodge;
+    const insufficient = id === 'special' ? actor.special < 100 : (actor.energy < action.cost && !freeDodge);
+    const disabled = battle.busy || battle.over || insufficient;
+    const copy = tr('actions')[id];
+    const cost = id === 'special' ? '100%' : (action.cost && !freeDodge ? `${action.cost}⚡` : '');
+    const ready = id === 'special' && actor.special >= 100 ? 'ready' : '';
+    return `<button class="pad-btn ${extraClass} ${premiumLocked?'locked':''} ${ready}" type="button" data-action="${id}" ${disabled?'disabled':''} aria-label="${copy[0]}" title="${copy[0]} — ${copy[1]}">
+      <span class="pad-ico">${premiumLocked?'🔒':action.icon}</span>
+      <span class="pad-name">${id==='special'?copy[0]:PAD_SHORT[id]}</span>
+      ${cost?`<span class="pad-cost">${cost}</span>`:''}
+    </button>`;
+  }
+
   function renderActionGrid(){
     if(!battle) return;
-    const actor = currentActor();
     const root = $('#actionGrid');
     if(battle.mode === 'duel'){
       $('#turnPrompt').textContent = `${tr('player')} ${battle.chooser} — ${tr('chooseAction')}`;
     }else $('#turnPrompt').textContent = tr('chooseAction');
-    root.innerHTML = Object.values(ACTIONS).map(action => {
-      const premiumLocked = action.premium && !isHolder;
-      const insufficient = action.id === 'special' ? actor.special < 100 : actor.energy < action.cost && !(actor.id==='valet'&&action.id==='dodge'&&actor.firstDodge);
-      const disabled = battle.busy || battle.over || insufficient;
-      const copy = tr('actions')[action.id];
-      const cost = action.id === 'special' ? '100%' : action.cost ? `${action.cost}⚡` : '';
-      return `<button class="action-btn ${action.category} ${premiumLocked?'locked':''}" type="button" data-action="${action.id}" ${disabled?'disabled':''}>
-        <span class="action-ico">${premiumLocked?'🔒':action.icon}</span>
-        <span class="action-copy"><b>${copy[0]}</b><small>${copy[1]}</small></span>
-        <span class="action-cost">${cost}</span>
-      </button>`;
-    }).join('');
-    $$('[data-action]',root).forEach(btn => btn.addEventListener('click',() => chooseAction(btn.dataset.action)));
+    root.innerHTML = `
+      <div class="gamepad">
+        <div class="pad-cluster">
+          <div class="dpad">
+            <span class="dpad-arrow dpad-up" aria-hidden="true">▲</span>
+            ${padButton('dodge','dpad-act dpad-left')}
+            <span class="dpad-hub" aria-hidden="true"></span>
+            <span class="dpad-arrow dpad-right" aria-hidden="true">▶</span>
+            ${padButton('guard','dpad-act dpad-down')}
+          </div>
+          <span class="pad-label">${tr('padDefense')}</span>
+        </div>
+        <div class="pad-cluster">
+          <div class="face">
+            ${padButton('crow','face-btn face-top')}
+            ${padButton('peck','face-btn face-left')}
+            ${padButton('wing','face-btn face-right')}
+            ${padButton('feint','face-btn face-bottom')}
+          </div>
+          <span class="pad-label">${tr('padAttack')}</span>
+        </div>
+      </div>
+      ${padButton('special','special-btn')}
+    `;
+    $$('[data-action]',root).forEach(btn => btn.addEventListener('click',() => { haptic('light'); chooseAction(btn.dataset.action); }));
   }
 
   function chooseAction(actionId){
@@ -728,9 +781,44 @@
     void el.offsetWidth;
     el.classList.add(cls);
     setTimeout(()=>el.classList.remove(cls), ANIM_DURATION[cls] || 470);
-    if(action.kind === 'attack') dust(side);
+    if(action.kind === 'attack' && action.id !== 'special') dust(side);
+    if(action.id === 'wing') feathers(side, 7);
+    if(action.id === 'special') launchEgg(side);
   }
-  function animateHit(side){ const el=$(`#${side}Side`);if(!el)return;el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),620);spark(side); }
+  function animateHit(side){ const el=$(`#${side}Side`);if(!el)return;el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),620);spark(side);feathers(side,4); }
+
+  function feathers(side, count=6){
+    const wrap = $(`#${side}Side .fighter-wrap`); if(!wrap) return;
+    for(let i=0;i<count;i++){
+      const f = document.createElement('span'); f.className = 'feather'; f.textContent = '🪶';
+      f.style.setProperty('--fx', `${-55+Math.random()*110}px`);
+      f.style.setProperty('--fr', `${-200+Math.random()*400}deg`);
+      f.style.animationDelay = `${Math.random()*.12}s`;
+      wrap.appendChild(f); setTimeout(()=>f.remove(),1000);
+    }
+  }
+  // "Ponte" un œuf-bombe qui traverse la scène puis explose sur l'adversaire.
+  function launchEgg(fromSide){
+    const stage = $('#arenaStage'); if(!stage) return;
+    const targetSide = fromSide === 'player' ? 'enemy' : 'player';
+    const egg = document.createElement('div');
+    egg.className = `egg-projectile ${fromSide === 'player' ? 'from-player' : 'from-enemy'}`;
+    egg.textContent = '🥚';
+    stage.appendChild(egg);
+    playSound('special');
+    setTimeout(()=>{ egg.remove(); eggExplode(targetSide); }, 500);
+  }
+  function eggExplode(side){
+    const wrap = $(`#${side}Side .fighter-wrap`); if(!wrap) return;
+    const boom = document.createElement('div'); boom.className = 'egg-explosion'; boom.textContent = '💥';
+    wrap.appendChild(boom); setTimeout(()=>boom.remove(),620);
+    for(let i=0;i<8;i++){
+      const y = document.createElement('span'); y.className = 'yolk';
+      y.style.setProperty('--a', `${i*45 + Math.random()*20}deg`);
+      wrap.appendChild(y); setTimeout(()=>y.remove(),640);
+    }
+    feathers(side, 6); shakeStage(1.7);
+  }
   function effect(side,text){ const el=$(`#${side}Effect`);el.textContent=text;el.classList.remove('show');void el.offsetWidth;el.classList.add('show'); }
 
   function shakeStage(power=1){
@@ -967,8 +1055,27 @@
       if(e.key==='Escape'){
         if($('#modalOverlay').classList.contains('show')) closeModal();
         else if(currentScreen!=='menu'&&currentScreen!=='battle') goBack();
+        return;
       }
+      handlePadKey(e);
     });
+    // Pick up a wallet linked on the same-origin wallet page after returning.
+    window.addEventListener('focus', refreshAccess);
+    window.addEventListener('storage', e=>{ if(e.key && e.key.startsWith('flc_')) refreshAccess(); });
+    document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshAccess(); });
+  }
+
+  const PAD_KEYS = {
+    KeyJ:'peck', Digit1:'peck', KeyK:'wing', Digit2:'wing', KeyL:'feint', Digit3:'feint',
+    KeyI:'crow', ArrowUp:'crow', KeyS:'guard', ArrowDown:'guard', KeyA:'dodge', ArrowLeft:'dodge',
+    Space:'special', Enter:'special'
+  };
+  function handlePadKey(e){
+    if(currentScreen!=='battle' || !battle || battle.busy || battle.over) return;
+    const action = PAD_KEYS[e.code];
+    if(!action) return;
+    e.preventDefault();
+    chooseAction(action);
   }
 
   function initPwa(){
