@@ -323,6 +323,9 @@
     ['campaign','arena','duel'].forEach(mode => {
       const el = document.querySelector(`[data-lock-for="${mode}"]`);
       if(el) el.innerHTML = lockSvg(isHolder);
+      // Le bouton suit l'état du cadenas : vert quand le mode est débloqué.
+      const btn = document.querySelector(`[data-open-mode="${mode}"]`);
+      if(btn) btn.classList.toggle('unlocked', isHolder);
     });
     const bar = $('#statusBar');
     bar.className = `status-bar ${isHolder ? 'franc' : 'no-franc'}`;
