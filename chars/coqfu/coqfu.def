@@ -1,0 +1,13 @@
+; Coq Fu Man — corps de Kung Fu Man (Elecbyte, CC BY-NC), tête de coq
+[Info]
+name = "CoqFuMan"
+displayname = "Coq Fu Man"
+versiondate = 1.0
+mugenversion = 1.0
+author = "ChickenFight"
+
+[Files]
+cmd = coqfu.cmd
+cns = coqfu.cns
+sprite = coqfu.sff
+anim = coqfu.air

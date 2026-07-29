@@ -999,13 +999,14 @@
   // en Valet, puis Reine, puis Roi, face à des adversaires plus coriaces.
   // Toute l'échelle tourne au format MUGEN : le coq et ses évolutions comme
   // le boss Ikemen GO passent par le même pipeline (.def/.sff/.air/.cns).
+  // Le joueur incarne Coq Fu Man : corps pixel art, tête de coq, cohérent
+  // avec les personnages Ikemen GO qu'il affronte. Il monte en puissance à
+  // chaque palier (le grade est purement statistique, comme les évolutions).
   const RT_LADDER = [
-    { player:'francisMugen', enemy:'valetMugen', ai:.30, php:200, ehp:180, epow:.9 },
-    { player:'valetMugen',   enemy:'reineMugen', ai:.52, php:210, ehp:210, epow:1.0 },
-    { player:'reineMugen',   enemy:'roiMugen',   ai:.72, php:225, ehp:245, epow:1.12 },
-    // Boss final : véritable personnage Ikemen GO, avec ses VRAIS coups
-    // exécutés depuis son .cns (Kung Fu Palm, etc.).
-    { player:'roiMugen',     enemy:'kfm720',     ai:.85, php:240, ehp:260, epow:1.2, label:'BOSS' }
+    { player:'coqfu', enemy:'kfm',    ai:.30, php:200, ehp:180, epow:.90, grade:'COQ' },
+    { player:'coqfu', enemy:'kfm',    ai:.52, php:215, ehp:210, epow:1.00, grade:'VALET' },
+    { player:'coqfu', enemy:'kfm720', ai:.72, php:230, ehp:240, epow:1.12, grade:'REINE' },
+    { player:'coqfu', enemy:'kfm720', ai:.88, php:250, ehp:270, epow:1.22, grade:'ROI', label:'BOSS' }
   ];
   let rtStage = 0, rtBound = false, rtActive = false;
 
@@ -1029,7 +1030,8 @@
     if(!window.ChickenArena){ toast('Moteur indisponible'); return; }
     const cfg = RT_LADDER[rtStage];
     const badge = cfg.label ? cfg.label : `ÉVOLUTION ${rtStage+1}/${RT_LADDER.length}`;
-    $('#rtLadderBadge').textContent = `${badge} — ${rtName(cfg.player).toUpperCase()} vs ${rtName(cfg.enemy).toUpperCase()}`;
+    const grade = cfg.grade ? ` ${cfg.grade}` : '';
+    $('#rtLadderBadge').textContent = `${badge} — COQ FU MAN${grade} vs ${rtName(cfg.enemy).toUpperCase()}`;
     const canvas = $('#rtCanvas');
     ChickenArena.muted = !soundEnabled;
     ChickenArena.resetTouch();
@@ -1057,10 +1059,10 @@
       }else{
         confetti(); playSound('win'); haptic('success');
         const next = RT_LADDER[rtStage+1];
-        const evoIcon = { valetMugen:'🎴', reineMugen:'👸', roiMugen:'👑' }[next.player] || '🐓';
+        const evoIcon = { VALET:'🎴', REINE:'👸', ROI:'👑' }[next.grade] || '🐓';
         showModal(`<div style="font-size:52px">🐔➡️${evoIcon}</div>
           <h2>ÉVOLUTION !</h2>
-          <p>Victoire sur ${rtName(cfg.enemy)} ! Ton coq évolue en <b>${rtName(next.player)}</b> et affronte <b>${rtName(next.enemy)}</b>.</p>
+          <p>Victoire sur ${rtName(cfg.enemy)} ! Ton coq évolue au grade <b>${next.grade}</b> et affronte <b>${rtName(next.enemy)}</b>.</p>
           <div class="modal-actions">
             <button class="modal-btn green" data-modal-action="rtNext">CONTINUER</button>
             <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>

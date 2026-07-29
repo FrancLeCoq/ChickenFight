@@ -1,4 +1,4 @@
-const CACHE = 'chickenfight-v2.1.0';
+const CACHE = 'chickenfight-v2.2.0';
 // Core files change on every deploy → served network-first so updates show up.
 const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
 const CHARS = [
@@ -31,7 +31,8 @@ const CHARS = [
   'chars/kfm720/kfm720.sff',
   'chars/kfm720/kfm720.air',
   'chars/kfm720/kfm720.cmd',
-  'chars/kfm720/kfm720.cns'
+  'chars/kfm720/kfm720.cns',
+  'chars/coqfu/coqfu.def','chars/coqfu/coqfu.sff','chars/coqfu/coqfu.air','chars/coqfu/coqfu.cmd','chars/coqfu/coqfu.cns'
 ];
 // Static assets rarely change → cache-first for speed / offline.
 const ASSETS = [

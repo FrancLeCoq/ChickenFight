@@ -33,6 +33,9 @@
     // Personnage au format Ikemen GO / MUGEN : sprites et animations chargés
     // depuis ses propres fichiers (.def/.sff/.air).
     kfm:    { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
+    // Coq Fu Man : corps pixel art de KFM, tête de coq. Hérite de tout son
+    // moveset (mêmes .air/.cmd/.cns), donc cohérent visuellement ET mécaniquement.
+    coqfu:  { mugen:true, def:'chars/coqfu/coqfu.def', scale:1.75 },
     kfm720: { mugen:true, def:'chars/kfm720/kfm720.def', scale:0.44 },
     // Le coq et ses évolutions, convertis au format MUGEN : ils passent
     // exactement par le même pipeline que les personnages Ikemen GO.
@@ -291,8 +294,17 @@
     // Attaque pilotée par le CNS : c'est le HitDef du personnage qui décide.
     if(f.cns && f.hitDef){
       if(!f.hitDefUsed){
-        const reach = 60 + (f.hitDef.attr.includes('A') ? 10 : 0);
-        if(Math.abs(opp.x - f.x) < reach && Math.abs(opp.y - f.y) < 130){
+        // Collision au plus juste : boîtes Clsn1 de l'attaquant contre les
+        // Clsn2 du défenseur, telles que définies dans les fichiers .AIR.
+        const atk = clsnBoxes(f, 'hit');
+        const def = clsnBoxes(opp, 'hurt');
+        let touched;
+        if(atk && def) touched = anyOverlap(atk, def);
+        else {
+          const reach = 60 + (f.hitDef.attr.includes('A') ? 10 : 0);
+          touched = Math.abs(opp.x - f.x) < reach && Math.abs(opp.y - f.y) < 130;
+        }
+        if(touched){
           applyCnsHit(f, opp, f.hitDef);
           f.hitDefUsed = true; f.moveContact = 1; f.moveHit = 1;
         }
@@ -432,6 +444,36 @@
       playSound(){ playBeep('hit'); },
       // HitDef : le coup devient actif jusqu'à ce qu'il touche ou que l'état change.
       setHitDef(hd){ f.hitDef = hd; f.hitDefUsed = false; },
+      // ── effets visuels / de scène pilotés par le .cns ──
+      palFx(o){ f.palFx = { t:o.time, add:o.add, mul:o.mul, invert:o.invert }; },
+      envShake(time, ampl){ shakeStage(Math.min(2, ampl/8)); },
+      envColor(rgb, time){ fx.push({ kind:'flashscreen', rgb, t:0, life:Math.max(2,time) }); },
+      pause(time){ freeze(Math.min(60, time)); },
+      dust(pos){ dust(f.side === 0 ? 'player' : 'enemy'); },
+      afterImage(time){ f.afterImage = time; },
+      // ── effets sur l'adversaire ──
+      targetLife(v){ const o = other(f); if(o) o.hp = clampN(o.hp + v*(o.maxHp/1000), 0, o.maxHp); },
+      targetPower(v){ const o = other(f); if(o) o.meter = clampN(o.meter + v/30, 0, 100); },
+      targetVel(x, y, add){
+        const o = other(f); if(!o) return;
+        if(add){ o.vx += x*f.facing; o.vy += y; } else { o.vx = x*f.facing; o.vy = y; }
+      },
+      targetState(no){ const o = other(f); if(o && o.cns && !isNaN(no)) o.cns.changeState(no); },
+      targetBind(time, pos){
+        const o = other(f); if(!o) return;
+        o.boundTo = f; o.boundT = time; o.boundPos = pos;
+      },
+      targetDrop(){ const o = other(f); if(o){ o.boundTo = null; o.boundT = 0; } },
+      // ── vie / jauge / multiplicateurs ──
+      addLife(v){ f.hp = clampN(f.hp + v*(f.maxHp/1000), 0, f.maxHp); },
+      setLife(v){ f.hp = clampN(v*(f.maxHp/1000), 0, f.maxHp); },
+      setPower(v){ f.meter = clampN(v/30, 0, 100); },
+      setAttackMul(v){ f.attackMul = v; },
+      setDefenceMul(v){ f.defenceMul = v; },
+      setFall(v){ f.forceFall = v; },
+      hitOverride(stateNo, time){ f.hitOverride = { stateNo, time }; },
+      reversalDef(hd){ f.reversal = hd; },
+      assertSpecial(flag){ if(/invisible/i.test(flag)) f.invisible = 6; },
       spawnProjectile(hd, cfg){
         projectiles.push({ x:f.x + (cfg.offX||0)*f.facing, y:GROUND - 78 + (cfg.offY||0),
           vx:(cfg.velX||4)*f.facing, owner:f, life:cfg.removeTime>0?cfg.removeTime:120, rot:0, hitDef:hd });
@@ -440,6 +482,7 @@
     };
   }
   const clampN = (n,a,b) => Math.max(a, Math.min(b, n));
+  const other = f => fighters.find(x => x !== f) || null;
 
   /** Construit le contexte d'évaluation des déclencheurs CNS. */
   function cnsContext(f, opp){
@@ -539,7 +582,33 @@
   }
 
   // ── boîtes ──
-  function hurtbox(f){ return { x:f.x-26, y:GROUND-130, w:52, h:130 }; }
+  /**
+   * Boîtes de collision réelles (Clsn des fichiers .AIR), converties en
+   * coordonnées monde. Les coordonnées MUGEN sont relatives à l'axe du
+   * sprite, Y négatif vers le haut, et sont miroitées selon le facing.
+   */
+  function clsnBoxes(f, kind){
+    const frame = f.anim && f.anim.current();
+    const raw = frame && (kind === 'hit' ? frame.hit : frame.hurt);
+    if(!raw || !raw.length) return null;
+    const sc = f.r.scale || 1;
+    return raw.map(b => {
+      const x1 = f.facing > 0 ? b.x1 : -b.x2;
+      const x2 = f.facing > 0 ? b.x2 : -b.x1;
+      return { x: f.x + x1*sc, y: f.y + b.y1*sc,
+               w: (x2-x1)*sc,  h: (b.y2-b.y1)*sc };
+    });
+  }
+  function anyOverlap(as, bs){
+    if(!as || !bs) return false;
+    for(const a of as) for(const b of bs) if(overlap(a, b)) return true;
+    return false;
+  }
+  function hurtbox(f){
+    const real = clsnBoxes(f, 'hurt');
+    if(real && real.length) return real[0];          // compat : première boîte
+    return { x:f.x-26, y:GROUND-130, w:52, h:130 };
+  }
   function hitboxWorld(f, box){ return { x: f.x + (f.facing>0?box.x:-box.x-box.w), y: GROUND+box.y, w:box.w, h:box.h }; }
   function overlap(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 
@@ -731,6 +800,11 @@
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,.65)';
         const y = small?VH*0.22:VH*0.42;
         ctx.strokeText(o.text,VW/2,y); ctx.fillText(o.text,VW/2,y); ctx.restore();
+      }
+      if(o.kind==='flashscreen'){
+        const k=o.t/o.life; ctx.save(); ctx.globalAlpha=(1-k)*0.5;
+        ctx.fillStyle=`rgb(${o.rgb[0]||255},${o.rgb[1]||255},${o.rgb[2]||255})`;
+        ctx.fillRect(0,0,VW,VH); ctx.restore();
       }
       if(o.kind==='combo'){
         const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k*k;

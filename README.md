@@ -114,6 +114,25 @@ Un jeu de fixtures au format réel se trouve dans `testchar/` pour valider les p
 
 Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la source d'Ikemen GO (`src/image.go`, licence MIT).
 
+### Coq Fu Man — le combattant principal
+
+Le coq illustré jurait visuellement avec les personnages MUGEN en pixel art. `tools/build-rooster-head.py` règle le problème par un **head-swap**, la technique classique du milieu :
+
+- décodage des 281 sprites de Kung Fu Man ;
+- localisation de la tête dans chaque pose (détection géométrique affinée par le bandeau — attention, la couleur sombre du personnage est un **contour** partagé par tout le corps, pas un repère de tête) ;
+- greffe d'une tête de coq pixellisée, mise à l'échelle de la boîte détectée ;
+- réutilisation des `.air` / `.cmd` / `.cns` de KFM : le personnage hérite ainsi de **tout son moveset réel** (frame data, spéciaux, supers).
+
+```bash
+python3 tools/build-rooster-head.py     # régénère chars/coqfu/
+```
+
+C'est lui que l'on incarne dans le mode **COMBAT**, et il monte en grade (Coq ▸ Valet ▸ Reine ▸ Roi) au fil des paliers.
+
+### Hitbox réelles (Clsn)
+
+Les boîtes de collision sont désormais lues dans les fichiers `.AIR` : `Clsn1` (attaque) et `Clsn2` (corps), y compris les blocs `Default` valables pour toute l'animation. Sur Kung Fu Man, **604 frames sur 655** portent leurs hurtboxes réelles et 63 leurs hitboxes. Les coordonnées MUGEN (relatives à l'axe, Y négatif vers le haut) sont converties et miroitées selon l'orientation du combattant. À défaut de boîtes, le moteur retombe sur une portée approchée.
+
 ### Interpréteur CNS — les personnages utilisent leurs VRAIS coups
 
 `js/cns-interpreter.js` exécute les fichiers `.CNS`, c'est-à-dire la logique de combat des personnages :
@@ -121,7 +140,7 @@ Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la sou
 - **parseur d'états** : `[Statedef N]` + attributs, `[State]` + contrôleurs ;
 - **évaluateur de déclencheurs** avec la sémantique MUGEN exacte (`triggerall` en ET, `trigger1/2/…` en OU), comparaisons, `&&`/`||`, parenthèses, littéraux d'état (`StateType = S`) ;
 - **déclencheurs** : `Time`, `AnimTime`, `AnimElem`, `Anim`, `StateNo`, `Command`, `Ctrl`, `Life`, `Power`, `MoveContact/Hit/Guarded`, `Vel`/`Pos`, `P2BodyDist`, `Var`… ;
-- **contrôleurs** : `ChangeState`, `ChangeAnim`, `VelSet/Add/Mul`, `PosSet/Add`, `CtrlSet`, `HitDef`, `Projectile`, `PowerAdd`, `StateTypeSet`, `VarSet`, `Turn`… — **84 % des contrôleurs de KFM** sont couverts, le reste est ignoré sans bloquer l'exécution.
+- **contrôleurs** : `ChangeState`, `ChangeAnim`, `VelSet/Add/Mul`, `PosSet/Add`, `CtrlSet`, `HitDef`, `Projectile`, `PowerAdd`, `StateTypeSet`, `VarSet`, `Turn`… — **99 % des contrôleurs de KFM** sont couverts, le reste est ignoré sans bloquer l'exécution.
 
 Le `HitDef` du personnage pilote dégâts, hitstun, projection et hitstop, avec mise à l'échelle de la vie MUGEN (1000) vers celle du jeu. Vérifié sur le vrai KFM : son état 200 produit `anim=200`, `ctrl=0`, `power+=10` puis un HitDef de **23 dégâts / hitTime 11** ; son état 1000 (Kung Fu Palm) un HitDef de **85 dégâts / hitTime 17 / projection −7**.
 
