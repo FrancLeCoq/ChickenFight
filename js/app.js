@@ -351,7 +351,7 @@
   }
 
   function screenTitle(name){
-    const map = { menu:'', campaign:tr('campaign'), arena:tr('arena'), duel:tr('duel'), profile:tr('profile'), battle:battle ? tr(`mode${capitalize(battle.mode)}`) : '' };
+    const map = { menu:'', campaign:tr('campaign'), arena:tr('arena'), duel:tr('duel'), profile:tr('profile'), realtime:'ARÈNE TEMPS RÉEL', battle:battle ? tr(`mode${capitalize(battle.mode)}`) : '' };
     return map[name] || '';
   }
 
@@ -362,7 +362,7 @@
     if(push && currentScreen !== 'battle') screenStack.push(currentScreen);
     $$('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
     currentScreen = name;
-    $('#backBtn').classList.toggle('hidden', name === 'menu' || name === 'battle');
+    $('#backBtn').classList.toggle('hidden', name === 'menu' || name === 'battle' || name === 'realtime');
     updateScreenCaption();
     window.scrollTo({top:0,behavior:'instant'});
   }
@@ -986,6 +986,104 @@
     if(action==='menu') goMenu();
     if(action==='share') shareResult();
     if(action==='forfeit'){ closeModal(); finishBattle(true); }
+    if(action==='rtNext'){ closeModal(); rtStage++; startRtStage(); }
+    if(action==='rtRetry'){ closeModal(); startRtStage(); }
+    if(action==='rtMenu'){ closeModal(); rtQuit(); }
+  }
+
+  // ══════════════ ARÈNE TEMPS RÉEL (moteur ChickenArena) ══════════════
+  // Échelle d'évolution : le coq absorbe l'adversaire vaincu et « évolue »
+  // en Valet, puis Reine, puis Roi, face à des adversaires plus coriaces.
+  const RT_LADDER = [
+    { player:'francis', enemy:'valet', ai:.30, php:200, ehp:180, epow:.9 },
+    { player:'valet',   enemy:'reine', ai:.52, php:210, ehp:210, epow:1.0 },
+    { player:'reine',   enemy:'roi',   ai:.72, php:225, ehp:245, epow:1.12 }
+  ];
+  let rtStage = 0, rtBound = false, rtActive = false;
+
+  function openRealtime(){
+    rtStage = 0;
+    bindRtControls();
+    showScreen('realtime');
+    startRtStage();
+  }
+
+  function startRtStage(){
+    if(!window.ChickenArena){ toast('Moteur indisponible'); return; }
+    const cfg = RT_LADDER[rtStage];
+    $('#rtLadderBadge').textContent = `ÉVOLUTION ${rtStage+1}/3 — ${characterName(cfg.player).toUpperCase()} vs ${characterName(cfg.enemy).toUpperCase()}`;
+    const canvas = $('#rtCanvas');
+    ChickenArena.muted = !soundEnabled;
+    ChickenArena.resetTouch();
+    rtActive = true;
+    ChickenArena.start({
+      canvas, playerId: cfg.player, enemyId: cfg.enemy,
+      playerStats:{ hp:cfg.php, power:1, defense:1 },
+      enemyStats:{ hp:cfg.ehp, power:cfg.epow, defense:1, ai:cfg.ai },
+      time:60, best:2,
+      onEnd: rtOnEnd
+    });
+  }
+
+  function rtOnEnd(result){
+    rtActive = false;
+    const cfg = RT_LADDER[rtStage];
+    if(result.win){
+      profile.feathers += 20; profile.xp += 40; saveProfile(); renderProfile();
+      if(rtStage >= RT_LADDER.length-1){
+        confetti(); playSound('win'); haptic('success');
+        showModal(`<img class="result-rooster" src="assets/francis-happy.webp" alt="">
+          <h2>ROI DU POULAILLER 👑</h2>
+          <p>Ton coq a tout absorbé : Valet, Reine et Roi. Évolution ultime atteinte !</p>
+          <div class="modal-actions"><button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button></div>`);
+      }else{
+        confetti(); playSound('win'); haptic('success');
+        const next = RT_LADDER[rtStage+1];
+        showModal(`<div style="font-size:52px">🐔➡️${next.player==='valet'?'🎴':next.player==='reine'?'👸':'👑'}</div>
+          <h2>ÉVOLUTION !</h2>
+          <p>Victoire sur ${characterName(cfg.enemy)} ! Ton coq évolue en <b>${characterName(next.player)}</b> et affronte <b>${characterName(next.enemy)}</b>.</p>
+          <div class="modal-actions">
+            <button class="modal-btn green" data-modal-action="rtNext">CONTINUER</button>
+            <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
+          </div>`);
+      }
+    }else{
+      playSound('lose'); haptic('error');
+      showModal(`<img class="result-rooster" src="assets/francis-sad.webp" alt="">
+        <h2>${tr('defeat')}</h2>
+        <p>${characterName(cfg.enemy)} t'a dominé. Réessaie ce palier d'évolution.</p>
+        <div class="modal-actions">
+          <button class="modal-btn green" data-modal-action="rtRetry">${tr('replay')}</button>
+          <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
+        </div>`);
+    }
+  }
+
+  function rtQuit(){
+    rtActive = false;
+    window.ChickenArena?.stop();
+    ChickenArena?.resetTouch?.();
+    goMenu();
+  }
+
+  function bindRtControls(){
+    if(rtBound) return; rtBound = true;
+    const press = (key,on) => window.ChickenArena?.setTouch(key,on);
+    $$('#rtPad .rt-dir').forEach(btn=>{
+      const dir = btn.dataset.dir;
+      const down = e=>{ e.preventDefault(); btn.classList.add('on'); press(dir,true); };
+      const up   = e=>{ e.preventDefault(); btn.classList.remove('on'); press(dir,false); };
+      btn.addEventListener('pointerdown',down);
+      btn.addEventListener('pointerup',up); btn.addEventListener('pointerleave',up); btn.addEventListener('pointercancel',up);
+    });
+    $$('#rtButtons .rt-atk').forEach(btn=>{
+      const b = btn.dataset.btn;
+      const down = e=>{ e.preventDefault(); press(b,true); };
+      const up   = e=>{ e.preventDefault(); press(b,false); };
+      btn.addEventListener('pointerdown',down);
+      btn.addEventListener('pointerup',up); btn.addEventListener('pointerleave',up); btn.addEventListener('pointercancel',up);
+    });
+    $('#rtQuitBtn').addEventListener('click', rtQuit);
   }
 
   function shareResult(){
@@ -1050,6 +1148,7 @@
   function bindEvents(){
     $$('[data-open-mode]').forEach(btn=>btn.addEventListener('click',()=>openMode(btn.dataset.openMode)));
     $('#profileBtn').addEventListener('click',()=>{renderProfile();showScreen('profile');});
+    $('#realtimeBtn').addEventListener('click',openRealtime);
     $('#walletBtn').addEventListener('click',goWallet);
     $('#flagFr').addEventListener('click',()=>setLang('fr'));
     $('#flagEn').addEventListener('click',()=>setLang('en'));

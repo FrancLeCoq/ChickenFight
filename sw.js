@@ -1,6 +1,6 @@
-const CACHE = 'chickenfight-v1.2.0';
+const CACHE = 'chickenfight-v1.3.0';
 // Core files change on every deploy → served network-first so updates show up.
-const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'manifest.webmanifest'];
+const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/netcode.js', 'manifest.webmanifest'];
 // Static assets rarely change → cache-first for speed / offline.
 const ASSETS = [
   'assets/francis-default.webp', 'assets/francis-happy.webp', 'assets/francis-sad.webp',
