@@ -59,6 +59,8 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 .menu-btn:active,.primary-action:active,.fighter-option:active,.action-btn:active{transform:scale(.975)}
 .menu-btn.free{background:linear-gradient(135deg,#16a34a,#166534);box-shadow:0 8px 22px rgba(22,163,74,.25)}
 .menu-btn.premium{background:linear-gradient(135deg,#d97706,#92400e);box-shadow:0 8px 22px rgba(217,119,6,.21)}
+/* Holder $FRANC : le mode est débloqué → le bouton passe au vert, comme le cadenas ouvert. */
+.menu-btn.premium.unlocked{background:linear-gradient(135deg,#16a34a,#166534);box-shadow:0 8px 22px rgba(22,163,74,.25)}
 .menu-btn.secondary{background:linear-gradient(135deg,#7c3aed,#4c1d95)}
 .menu-btn.wallet{background:linear-gradient(135deg,#0ea5e9,#0369a1)}
 .menu-btn.wallet.holder{background:linear-gradient(135deg,#16a34a,#166534)}
