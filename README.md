@@ -64,7 +64,21 @@ Le workflow `.github/workflows/pages.yml` publie automatiquement la branche `mai
 
 Le duel inclus dans cette version est un duel local à choix secrets sur un même appareil. Un PvP en ligne temps réel nécessitera un service serveur de matchmaking et de synchronisation des tours.
 
+## Arène temps réel (BÊTA) — moteur façon Ikemen GO
+
+En plus du combat tactique au tour par tour, le jeu embarque un **moteur de baston 2D temps réel** (`js/fighter-engine.js`, `window.ChickenArena`) qui absorbe les concepts d'Ikemen GO / MUGEN, réécrits pour le web :
+
+- boucle temps réel à pas fixe (60 Hz), machine à états par combattant ;
+- **frame data** par coup (startup / active / recovery), **hitbox** vs **hurtbox** ;
+- déplacements, saut, accroupi, **garde**, **pushbox**, projectiles (œuf) ;
+- **buffer d'inputs** et commande spéciale (→↓ + œuf), jauge de super ;
+- rounds / timer / KO, IA adverse, HUD arcade ;
+- rendu canvas avec les images existantes (rig 3 couches pour Francis).
+
+Accessible depuis le menu (**Arène temps réel**). **Échelle d'évolution** : le coq absorbe l'adversaire vaincu et évolue **Valet ▸ Reine ▸ Roi** face à des IA de plus en plus fortes. Contrôles : manette tactile à l'écran + clavier (◀▶ déplacer, ▲ saut, ▼ garde/bas, J bec, L patte, K aile, Espace œuf).
+
 ## Roadmap
 
-- **Combats de coq en ligne** : matchmaking et synchronisation des tours via un service serveur (Supabase Realtime / Edge Functions), en réutilisant le moteur de combat déterministe déjà en place.
-- **Paris en Franc** : système de mise et de gains adossé à `$FRANC`, avec vérification holder existante (`check-franc`) comme base d'authentification wallet.
+- **Duel en ligne temps réel** : squelette prêt dans `js/netcode.js` (`window.ChickenNet`). Plan : lobby via Supabase Realtime, P2P WebRTC pour la latence, netcode **rollback** (le moteur doit devenir déterministe — RNG à graine partagée). À finaliser.
+- **Paris en Franc** : mise et gains adossés à `$FRANC`, avec la vérification holder existante (`check-franc`) comme base d'authentification wallet.
+- **Bascule complète** : une fois l'arène temps réel validée, elle remplacera le combat au tour par tour comme mode principal.

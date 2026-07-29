@@ -45,6 +45,12 @@
           <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
         </button>
 
+        <button class="menu-btn arena-live" type="button" id="realtimeBtn">
+          <span class="menu-ico">🎮</span>
+          <span class="menu-text"><b>ARÈNE TEMPS RÉEL</b><small>Baston temps réel — évolue Valet ▸ Reine ▸ Roi</small></span>
+          <span class="access-pill" style="background:#ef4444">BÊTA</span>
+        </button>
+
         <button class="menu-btn premium" type="button" data-open-mode="campaign">
           <span class="menu-ico">👑</span>
           <span class="menu-text"><b data-i18n="campaign">CAMPAGNE ROYALE</b><small data-i18n="campaignSub">Valet, Reine puis Roi</small></span>
@@ -154,6 +160,29 @@
       </div>
     </section>
 
+    <section class="screen realtime-screen" id="screen-realtime" data-screen="realtime">
+      <div class="rt-topline">
+        <span class="mode-badge" id="rtLadderBadge">ÉVOLUTION 1/3</span>
+        <button class="quit-link" id="rtQuitBtn" type="button">Quitter</button>
+      </div>
+      <div class="rt-stage"><canvas id="rtCanvas" width="640" height="360"></canvas></div>
+      <div class="rt-controls">
+        <div class="rt-pad" id="rtPad">
+          <button class="rt-dir rt-up" data-dir="up" aria-label="Sauter">▲</button>
+          <button class="rt-dir rt-left" data-dir="left" aria-label="Gauche">◀</button>
+          <button class="rt-dir rt-down" data-dir="down" aria-label="Accroupir">▼</button>
+          <button class="rt-dir rt-right" data-dir="right" aria-label="Droite">▶</button>
+        </div>
+        <div class="rt-buttons" id="rtButtons">
+          <button class="rt-atk rt-peck" data-btn="light">🥊<b>BEC</b></button>
+          <button class="rt-atk rt-kick" data-btn="kick">🦵<b>PATTE</b></button>
+          <button class="rt-atk rt-wing" data-btn="heavy">🪽<b>AILE</b></button>
+          <button class="rt-atk rt-egg" data-btn="special">🥚<b>ŒUF</b></button>
+        </div>
+      </div>
+      <p class="rt-hint">Clavier : ◀▶ déplacer · ▲ saut · ▼ garde/bas · J bec · L patte · K aile · Espace œuf (jauge pleine, ou →↓ + œuf)</p>
+    </section>
+
     <section class="screen battle-screen" id="screen-battle" data-screen="battle">
       <div class="battle-header">
         <span class="mode-badge" id="battleModeBadge">ENTRAÎNEMENT</span>
@@ -226,6 +255,8 @@
   <div class="toast" id="toast" aria-live="polite"></div>
   <div class="confetti" id="confetti"></div>
 
+  <script src="js/fighter-engine.js" defer></script>
+  <script src="js/netcode.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>
 </html>
