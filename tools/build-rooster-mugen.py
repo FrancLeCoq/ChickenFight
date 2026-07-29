@@ -26,13 +26,28 @@ CANVAS = (170, 215)          # taille de travail des sprites
 SCALE = 0.215                # réduction depuis les sources 721x900
                              # (donne ~155x193, à l'échelle d'un perso MUGEN)
 
-def load_rig():
+# Personnages à générer : Francis est « riggé » (3 couches articulables),
+# les autres n'ont qu'une image → les poses viennent de transformations.
+CHARACTERS = {
+    'francis': dict(rig=True, display='Francis Le Coq',
+                    files=dict(tail='francis-tail.webp', body='francis-body.webp', head='francis-head.webp')),
+    'valet':   dict(rig=False, display='Le Valet', files=dict(body='valet.webp')),
+    'reine':   dict(rig=False, display='La Reine', files=dict(body='reine.webp')),
+    'roi':     dict(rig=False, display='Le Roi',   files=dict(body='roi.webp')),
+}
+
+def load_parts(spec):
     parts = {}
-    for name, fn in (('tail','francis-tail.webp'), ('body','francis-body.webp'), ('head','francis-head.webp')):
+    for name, fn in spec['files'].items():
         p = os.path.join(ASSETS, fn)
         if not os.path.exists(p):
-            raise SystemExit(f'manque {p} — lancer d\'abord la génération du rig')
+            raise SystemExit(f'manque {p}')
         parts[name] = Image.open(p).convert('RGBA')
+    if not spec['rig']:
+        # Sans rig : la tête et la queue pointent sur le corps, les rotations
+        # de partie n'ont alors aucun effet (seules les poses globales jouent).
+        parts.setdefault('tail', Image.new('RGBA', parts['body'].size, (0,0,0,0)))
+        parts.setdefault('head', Image.new('RGBA', parts['body'].size, (0,0,0,0)))
     return parts
 
 def compose(parts, head_rot=0.0, head_dx=0, head_dy=0, tail_rot=0.0,
@@ -67,8 +82,14 @@ def compose(parts, head_rot=0.0, head_dx=0, head_dy=0, tail_rot=0.0,
     out.alpha_composite(layer, (ox, oy))
     return out
 
-def build_poses(parts):
-    """Poses aux numéros d'animation standard MUGEN."""
+def build_poses(parts, rigged=True):
+    """Poses aux numéros d'animation standard MUGEN.
+
+    Sans rig, les rotations de tête/queue sont neutralisées et l'expressivité
+    passe entièrement par l'inclinaison, le déplacement et l'écrasement.
+    """
+    if not rigged:
+        return build_poses_simple(parts)
     P = {}
     # 0 — attente (respiration)
     P[(0,0)] = compose(parts)
@@ -103,6 +124,34 @@ def build_poses(parts):
     P[(5000,0)] = compose(parts, body_rot=0.22, body_dx=-12, head_rot=0.36, tail_rot=0.30)
     # 5110 — au sol (K.O.)
     P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9, head_rot=0.5)
+    return P
+
+def build_poses_simple(parts):
+    """Poses pour un personnage sans rig : tout vient des transformations."""
+    P = {}
+    P[(0,0)] = compose(parts)
+    P[(0,1)] = compose(parts, body_dy=-3, body_rot=-0.015)
+    P[(0,2)] = compose(parts, body_dy=-6, squash=1.01)
+    P[(0,3)] = compose(parts, body_dy=-2, body_rot=0.015)
+    P[(11,0)] = compose(parts, squash=0.74)
+    for i,(dx,dy) in enumerate([(0,0),(4,-5),(8,0),(4,-5)]):
+        P[(20,i)] = compose(parts, body_dx=dx, body_dy=dy, body_rot=-0.05)
+    for i,(dx,dy) in enumerate([(0,0),(-4,-5),(-8,0),(-4,-5)]):
+        P[(21,i)] = compose(parts, body_dx=dx, body_dy=dy, body_rot=0.05)
+    P[(41,0)] = compose(parts, body_rot=-0.12, squash=1.06)
+    P[(43,0)] = compose(parts, body_rot=0.10, squash=0.96)
+    P[(130,0)] = compose(parts, body_rot=0.12, squash=0.93)
+    # attaques : projection du corps vers l'avant
+    P[(200,0)] = compose(parts, body_dx=6, body_rot=-0.06)
+    P[(200,1)] = compose(parts, body_dx=30, body_rot=0.18, squash=1.03)
+    P[(200,2)] = compose(parts, body_dx=14, body_rot=0.08)
+    P[(210,0)] = compose(parts, body_rot=-0.16, body_dx=-6)
+    P[(210,1)] = compose(parts, body_rot=0.26, body_dx=34, squash=1.05)
+    P[(210,2)] = compose(parts, body_rot=0.10, body_dx=12)
+    P[(230,0)] = compose(parts, body_rot=-0.08, squash=0.95)
+    P[(230,1)] = compose(parts, body_rot=0.20, body_dx=32, body_dy=-10, squash=1.02)
+    P[(5000,0)] = compose(parts, body_rot=0.26, body_dx=-16)
+    P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9)
     return P
 
 def crop_poses(poses):
@@ -349,19 +398,30 @@ sprite = francis.sff
 anim = francis.air
 """
 
-def main():
-    os.makedirs(OUT, exist_ok=True)
-    parts = load_rig()
-    poses = build_poses(parts)
-    print(f'{len(poses)} poses composées')
+def build_character(cid, spec):
+    out = os.path.join(ROOT, 'chars', cid)
+    os.makedirs(out, exist_ok=True)
+    parts = load_parts(spec)
+    poses = build_poses(parts, rigged=spec['rig'])
     poses = crop_poses(poses)
     sprites, palette = quantize_all(poses)
-    write_sff(os.path.join(OUT, 'francis.sff'), sprites, palette)
-    for fn, txt in (('francis.air', AIR), ('francis.cmd', CMD),
-                    ('francis.cns', CNS), ('francis.def', DEF)):
-        open(os.path.join(OUT, fn), 'w', encoding='utf-8').write(txt)
-    size = os.path.getsize(os.path.join(OUT, 'francis.sff'))
-    print(f'écrit dans {OUT} — francis.sff = {size} octets')
+    write_sff(os.path.join(out, f'{cid}.sff'), sprites, palette)
+    definition = DEF.replace('francis', cid).replace('Francis Le Coq', spec['display'])
+    definition = definition.replace('name = "Francis"', f'name = "{spec["display"]}"')
+    for fn, txt in ((f'{cid}.air', AIR), (f'{cid}.cmd', CMD),
+                    (f'{cid}.cns', CNS), (f'{cid}.def', definition)):
+        open(os.path.join(out, fn), 'w', encoding='utf-8').write(txt)
+    size = os.path.getsize(os.path.join(out, f'{cid}.sff'))
+    print(f'  {cid:8s} {len(poses):3d} poses  {size//1024:4d} Ko  → chars/{cid}/')
+
+def main():
+    import sys
+    wanted = sys.argv[1:] or list(CHARACTERS)
+    print('Génération des personnages au format MUGEN :')
+    for cid in wanted:
+        spec = CHARACTERS.get(cid)
+        if not spec: print(f'  {cid} : inconnu, ignoré'); continue
+        build_character(cid, spec)
 
 if __name__ == '__main__':
     main()

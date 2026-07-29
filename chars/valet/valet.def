@@ -1,0 +1,14 @@
+; Le Valet — personnage ChickenFight
+[Info]
+name = "Le Valet"
+displayname = "Le Valet"
+versiondate = 1.0
+mugenversion = 1.0
+author = "ChickenFight"
+pal.defaults = 1
+
+[Files]
+cmd = valet.cmd
+cns = valet.cns
+sprite = valet.sff
+anim = valet.air

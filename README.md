@@ -98,7 +98,9 @@ Notation numpad relative au sens du personnage, fenêtres de saisie, priorité d
 **Chargeur de personnages** (`js/mugen-loader.js`) — lit les vrais formats Ikemen GO / MUGEN pour faire combattre de vrais personnages :
 
 - `.DEF` (fiche INI), `.AIR` (animations), `.CMD` (commandes), `.CNS` (constantes) ;
-- `.SFF` v1 (palette + PCX RLE) et v2 (sous-formats RAW et PNG). Les sprites SFF v2 compressés en RLE8/RLE5/LZ5 ne sont pas encore décodés et sont ignorés sans bloquer le chargement.
+- `.SFF` **v1** (palette + PCX RLE) et **v2** — tous les sous-formats courants : **RAW**, **RLE8**, **RLE5**, **LZ5** et **PNG à palette**.
+
+Les PNG du format 10 portent des *index*, pas des couleurs : leur palette interne est souvent nulle et ce sont les palettes du SFF qui font foi. Le chargeur décode donc ces PNG lui-même (inflate + dé-filtrage des lignes) pour récupérer les index avant d'appliquer la bonne palette — sans quoi le personnage s'affiche entièrement noir.
 
 ```js
 const perso = await ChickenMugen.loadCharacter('chars/kfm/kfm.def');
@@ -112,6 +114,19 @@ Un jeu de fixtures au format réel se trouve dans `testchar/` pour valider les p
 
 Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la source d'Ikemen GO (`src/image.go`, licence MIT).
 
+### Interpréteur CNS — les personnages utilisent leurs VRAIS coups
+
+`js/cns-interpreter.js` exécute les fichiers `.CNS`, c'est-à-dire la logique de combat des personnages :
+
+- **parseur d'états** : `[Statedef N]` + attributs, `[State]` + contrôleurs ;
+- **évaluateur de déclencheurs** avec la sémantique MUGEN exacte (`triggerall` en ET, `trigger1/2/…` en OU), comparaisons, `&&`/`||`, parenthèses, littéraux d'état (`StateType = S`) ;
+- **déclencheurs** : `Time`, `AnimTime`, `AnimElem`, `Anim`, `StateNo`, `Command`, `Ctrl`, `Life`, `Power`, `MoveContact/Hit/Guarded`, `Vel`/`Pos`, `P2BodyDist`, `Var`… ;
+- **contrôleurs** : `ChangeState`, `ChangeAnim`, `VelSet/Add/Mul`, `PosSet/Add`, `CtrlSet`, `HitDef`, `Projectile`, `PowerAdd`, `StateTypeSet`, `VarSet`, `Turn`… — **84 % des contrôleurs de KFM** sont couverts, le reste est ignoré sans bloquer l'exécution.
+
+Le `HitDef` du personnage pilote dégâts, hitstun, projection et hitstop, avec mise à l'échelle de la vie MUGEN (1000) vers celle du jeu. Vérifié sur le vrai KFM : son état 200 produit `anim=200`, `ctrl=0`, `power+=10` puis un HitDef de **23 dégâts / hitTime 11** ; son état 1000 (Kung Fu Palm) un HitDef de **85 dégâts / hitTime 17 / projection −7**.
+
+La locomotion (marche, saut, garde) reste gérée par le moteur : ces états communs vivent normalement dans le `common1.cns` du moteur, pas dans le fichier du personnage.
+
 ### Le coq est lui aussi un personnage MUGEN
 
 `tools/build-rooster-mugen.py` convertit Francis en **véritable personnage au format M.U.G.E.N / Ikemen GO**, généré depuis son rig 3 couches :
@@ -121,8 +136,11 @@ Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la sou
 - `francis.air` aux **numéros d'animation standard MUGEN** (0 attente, 20 marche, 200 poing, 5000 touché, 5110 au sol…), plus `.cmd`, `.cns` et `.def`.
 
 ```bash
-python3 tools/build-rooster-mugen.py     # régénère chars/francis/
+python3 tools/build-rooster-mugen.py            # les 4 personnages
+python3 tools/build-rooster-mugen.py valet roi  # ou une sélection
 ```
+
+**Toute l'échelle d'évolution tourne au format MUGEN** : Francis, le Valet, la Reine et le Roi sont générés par ce script (26 poses chacun, ~420 Ko), et le boss final est le vrai Kung Fu Man. Les personnages sans rig (Valet, Reine, Roi) tirent leur expressivité de l'inclinaison, du déplacement et de l'écrasement.
 
 Le personnage produit est relu par le chargeur du jeu (aller-retour vérifié) et suit **exactement le même pipeline** que Kung Fu Man — il est donc en principe utilisable dans le vrai Ikemen GO natif.
 

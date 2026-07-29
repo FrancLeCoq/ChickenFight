@@ -32,9 +32,14 @@
     roi:   { rigged:false, srcW:660, srcH:900, scale:0.215, layers:{ body:'assets/roi.webp' } },
     // Personnage au format Ikemen GO / MUGEN : sprites et animations chargés
     // depuis ses propres fichiers (.def/.sff/.air).
-    kfm:   { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
-    // Francis converti au format MUGEN : même pipeline que les persos Ikemen GO.
-    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 }
+    kfm:    { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
+    kfm720: { mugen:true, def:'chars/kfm720/kfm720.def', scale:0.44 },
+    // Le coq et ses évolutions, convertis au format MUGEN : ils passent
+    // exactement par le même pipeline que les personnages Ikemen GO.
+    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 },
+    valetMugen:   { mugen:true, def:'chars/valet/valet.def',     scale:0.95 },
+    reineMugen:   { mugen:true, def:'chars/reine/reine.def',     scale:0.95 },
+    roiMugen:     { mugen:true, def:'chars/roi/roi.def',         scale:1.00 }
   };
   const mugenCache = {};   // id → personnage chargé
 

@@ -1,0 +1,14 @@
+; Le Roi — personnage ChickenFight
+[Info]
+name = "Le Roi"
+displayname = "Le Roi"
+versiondate = 1.0
+mugenversion = 1.0
+author = "ChickenFight"
+pal.defaults = 1
+
+[Files]
+cmd = roi.cmd
+cns = roi.cns
+sprite = roi.sff
+anim = roi.air

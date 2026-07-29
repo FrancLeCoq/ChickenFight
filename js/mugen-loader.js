@@ -155,13 +155,14 @@
   }
 
   /** Transforme une image indexée + palette RGB en canvas (index 0 = transparent). */
-  function indexedToCanvas(idx, w, h, pal){
+  function indexedToCanvas(idx, w, h, pal, trns){
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const ctx = cv.getContext('2d');
     const img = ctx.createImageData(w, h);
     for(let i = 0; i < idx.length; i++){
       const c = idx[i], o = i * 4;
-      if(c === 0){ img.data[o+3] = 0; continue; }       // couleur 0 = transparente
+      // index 0 transparent (convention MUGEN), ou alpha issu du chunk tRNS
+      if(c === 0 || (trns && trns[c] === 0)){ img.data[o+3] = 0; continue; }
       img.data[o]   = pal[c*3];
       img.data[o+1] = pal[c*3+1];
       img.data[o+2] = pal[c*3+2];
@@ -316,6 +317,73 @@
     return p;
   }
 
+  // ── PNG à palette (SFF v2, format 10) ──────────────────────────
+  // Ces PNG portent des INDEX, pas des couleurs : leur palette interne est
+  // souvent nulle (tout noir) et ce sont les palettes du SFF qui font foi
+  // (même logique que png.Decode + pi.Pix côté Ikemen GO). Il faut donc
+  // décoder le PNG soi-même pour récupérer les index.
+  async function decodeIndexedPng(png, pal, expectW, expectH){
+    // 1) lecture des chunks
+    let p = 8, w = 0, h = 0, depth = 0, colorType = -1, idat = [], trns = null;
+    while(p < png.length - 8){
+      const len = (png[p]<<24 | png[p+1]<<16 | png[p+2]<<8 | png[p+3]) >>> 0;
+      const type = String.fromCharCode(png[p+4], png[p+5], png[p+6], png[p+7]);
+      const data = png.subarray(p+8, p+8+len);
+      if(type === 'IHDR'){
+        w = (data[0]<<24|data[1]<<16|data[2]<<8|data[3])>>>0;
+        h = (data[4]<<24|data[5]<<16|data[6]<<8|data[7])>>>0;
+        depth = data[8]; colorType = data[9];
+      }
+      else if(type === 'IDAT') idat.push(data);
+      else if(type === 'tRNS') trns = data;
+      else if(type === 'IEND') break;
+      p += 12 + len;
+    }
+    if(colorType !== 3 || depth !== 8) return null;      // non paletté → voie normale
+
+    // 2) décompression zlib
+    const total = idat.reduce((s,a)=>s+a.length, 0);
+    const z = new Uint8Array(total);
+    let off = 0; for(const a of idat){ z.set(a, off); off += a.length; }
+    let raw;
+    try{
+      const ds = new DecompressionStream('deflate');
+      raw = new Uint8Array(await new Response(
+        new Blob([z]).stream().pipeThrough(ds)
+      ).arrayBuffer());
+    }catch{ return null; }
+
+    // 3) dé-filtrage des lignes (1 octet par pixel en mode paletté 8 bits)
+    const idx = new Uint8Array(w*h);
+    let sp = 0;
+    for(let y = 0; y < h; y++){
+      const filter = raw[sp++];
+      const row = y*w, prev = (y-1)*w;
+      for(let x = 0; x < w; x++){
+        const cur = raw[sp++] || 0;
+        const a = x > 0 ? idx[row + x - 1] : 0;
+        const b = y > 0 ? idx[prev + x] : 0;
+        const c = (x > 0 && y > 0) ? idx[prev + x - 1] : 0;
+        let v;
+        switch(filter){
+          case 0: v = cur; break;
+          case 1: v = cur + a; break;
+          case 2: v = cur + b; break;
+          case 3: v = cur + ((a + b) >> 1); break;
+          case 4: {                                   // Paeth
+            const pp = a + b - c, pa = Math.abs(pp-a), pb = Math.abs(pp-b), pc = Math.abs(pp-c);
+            v = cur + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+            break;
+          }
+          default: v = cur;
+        }
+        idx[row + x] = v & 0xff;
+      }
+    }
+    if(expectW && expectH && (w !== expectW || h !== expectH)) { /* on garde quand même */ }
+    return indexedToCanvas(idx, w, h, pal, trns);
+  }
+
   async function parseSffV2(buf){
     const sprites = new Map();
     const sprOff = rd.u32(buf, 36), sprCount = rd.u32(buf, 40);
@@ -378,6 +446,11 @@
         const data = buf.subarray(start + 4, start + src.dataLen);
         jobs.push((async () => {
           try{
+            // fmt 10 = PNG à palette : les couleurs viennent du SFF.
+            if(src.fmt === 10 && pal){
+              const cv = await decodeIndexedPng(data, pal, m.w, m.h);
+              if(cv){ sprites.set(`${m.group},${m.image}`, { canvas:cv, x:m.x, y:m.y }); return; }
+            }
             const bmp = await createImageBitmap(new Blob([data], { type:'image/png' }));
             sprites.set(`${m.group},${m.image}`, { canvas:bmp, x:m.x, y:m.y });
           }catch{ /* PNG illisible → ignoré */ }
