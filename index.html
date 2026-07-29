@@ -171,7 +171,11 @@
           <div class="bar special"><span id="playerSpecialFill"></span><b id="playerSpecialText">0%</b></div>
           <div class="fighter-wrap">
             <div class="sprite-shadow"></div>
-            <div class="sprite"><img id="playerImg" src="assets/francis-default.webp" alt="Combattant du joueur"></div>
+            <div class="sprite"><div class="rig" id="playerRig">
+              <img class="rig-layer rig-tail" id="playerTail" alt="" aria-hidden="true">
+              <img class="rig-layer rig-body" id="playerImg" src="assets/francis-default.webp" alt="Combattant du joueur">
+              <img class="rig-layer rig-head" id="playerHead" alt="" aria-hidden="true">
+            </div></div>
             <span class="effect-bubble" id="playerEffect"></span>
           </div>
         </div>
@@ -188,7 +192,11 @@
           <div class="bar special"><span id="enemySpecialFill"></span><b id="enemySpecialText">0%</b></div>
           <div class="fighter-wrap">
             <div class="sprite-shadow"></div>
-            <div class="sprite"><img id="enemyImg" src="assets/valet.webp" alt="Combattant adverse"></div>
+            <div class="sprite"><div class="rig" id="enemyRig">
+              <img class="rig-layer rig-tail" id="enemyTail" alt="" aria-hidden="true">
+              <img class="rig-layer rig-body" id="enemyImg" src="assets/valet.webp" alt="Combattant adverse">
+              <img class="rig-layer rig-head" id="enemyHead" alt="" aria-hidden="true">
+            </div></div>
             <span class="effect-bubble" id="enemyEffect"></span>
           </div>
         </div>
