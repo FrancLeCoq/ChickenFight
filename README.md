@@ -108,7 +108,12 @@ perso.sprite(0, 0);    // sprite (groupe, image)
 
 Un jeu de fixtures au format réel se trouve dans `testchar/` pour valider les parseurs.
 
-> **Licences** : le moteur Ikemen GO est MIT, mais **chaque personnage a son propre auteur et ses propres conditions**. Vérifier les autorisations avant d'embarquer un personnage tiers.
+**Personnage Ikemen GO chargé et vérifié** : `chars/kfm/` contient **Kung Fu Man** (Elecbyte), récupéré depuis le dépôt [Ikemen-GO-Screenpack](https://github.com/ikemen-engine/Ikemen-GO-Screenpack). Le chargeur en extrait **281 sprites** (dont 280 compressés en **LZ5**), **117 animations** et **36 commandes** en ~200 ms, rendus au pixel près.
+
+Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la source d'Ikemen GO (`src/image.go`, licence MIT).
+
+> ⚠️ **Licences — à trancher avant toute exploitation commerciale.**
+> Le **moteur** Ikemen GO est sous MIT (réutilisable librement), mais les **assets d'Elecbyte** (dont Kung Fu Man) sont distribués sous **Creative Commons 3.0 Non-Commercial**. La clause « non commercial » est **incompatible avec un jeu à paris en $FRANC**. Pour une version monétisée, il faudra soit obtenir une autorisation, soit utiliser des personnages libres de droits commerciaux, soit créer les siens (le coq, ses évolutions Valet/Reine/Roi). Chaque personnage MUGEN tiers a par ailleurs son propre auteur et ses propres conditions.
 
 ## Roadmap
 
