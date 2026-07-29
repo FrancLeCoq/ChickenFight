@@ -158,6 +158,12 @@
     roi: { id:'roi', nameFr:'Le Roi', nameEn:'The King', image:'assets/roi.webp', hp:116, power:1.08, defense:1.16, speed:.88, specialName:'Décret Royal' }
   };
 
+  // Personnages « riggés » : sprite découpé en couches animables séparément.
+  // Les autres retombent proprement sur leur image unique.
+  const CHARACTER_RIG = {
+    francis: { body:'assets/francis-body.webp', head:'assets/francis-head.webp', tail:'assets/francis-tail.webp' }
+  };
+
   const ACTIONS = {
     peck: { id:'peck', icon:'🥊', category:'basic', cost:0, premium:false, kind:'attack', accuracy:1, min:9, max:14 },
     guard: { id:'guard', icon:'🛡️', category:'defense', cost:0, premium:false, kind:'defense' },
@@ -501,8 +507,8 @@
     };
     profile.lastMode = config.mode;
     saveProfile();
-    $('#playerImg').src = battle.player.image;
-    $('#enemyImg').src = battle.enemy.image;
+    applyFighterSprite('player', battle.player.id);
+    applyFighterSprite('enemy', battle.enemy.id);
     showScreen('battle',false);
     $('#backBtn').classList.add('hidden');
     renderBattle();
@@ -521,10 +527,23 @@
     $('#enemyName').textContent = e.name;
     $('#playerPassive').textContent = tr('passives')[p.id];
     $('#enemyPassive').textContent = tr('passives')[e.id];
-    $('#playerImg').src = p.image; $('#enemyImg').src = e.image;
+    applyFighterSprite('player', p.id); applyFighterSprite('enemy', e.id);
     renderBar('player',p); renderBar('enemy',e);
     renderActionGrid();
     updateScreenCaption();
+  }
+
+  function applyFighterSprite(side, charId){
+    const rig = CHARACTER_RIG[charId];
+    const rigEl = $(`#${side}Rig`), base = $(`#${side}Img`), head = $(`#${side}Head`), tail = $(`#${side}Tail`);
+    if(!base) return;
+    if(rig){
+      base.src = rig.body; head.src = rig.head; tail.src = rig.tail;
+      rigEl?.classList.add('rigged');
+    }else{
+      base.src = CHARACTERS[charId].image; head.src = ''; tail.src = '';
+      rigEl?.classList.remove('rigged');
+    }
   }
 
   function renderBar(prefix,f){
