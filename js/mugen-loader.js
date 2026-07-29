@@ -398,7 +398,7 @@
     const out = {
       name: (info.displayname || info.name || 'Perso').replace(/^"|"$/g, ''),
       author: (info.author || '').replace(/^"|"$/g, ''),
-      anims: {}, commands: [], constants: {}, sprites: new Map(),
+      anims: {}, commands: [], constants: {}, states: {}, sprites: new Map(),
       sprite(group, image){ return this.sprites.get(`${group},${image}`) || null; }
     };
 
@@ -412,11 +412,23 @@
       try{ out.commands = parseCmd(await fetchText(base + files.cmd)); }
       catch(e){ console.warn('[ChickenMugen] CMD:', e.message); }
     }
-    // CNS (constantes : vitesse, dégâts…)
+    // CNS : constantes (INI) + états exécutables (interprétés par ChickenCns)
     const cnsFile = files.cns || files.stcommon;
     if(cnsFile){
-      try{ out.constants = parseIni(await fetchText(base + cnsFile)); }
+      try{
+        const txt = await fetchText(base + cnsFile);
+        out.constants = parseIni(txt);
+        if(window.ChickenCns) out.states = window.ChickenCns.parseCns(txt);
+      }
       catch(e){ console.warn('[ChickenMugen] CNS:', e.message); }
+    }
+    // Fichiers d'états additionnels (st, st1, st2… chez beaucoup de persos)
+    for(const k of ['st','st1','st2','st3']){
+      if(!files[k] || !window.ChickenCns) continue;
+      try{
+        const extra = window.ChickenCns.parseCns(await fetchText(base + files[k]));
+        out.states = Object.assign(out.states || {}, extra);
+      }catch{ /* fichier absent → ignoré */ }
     }
     // SFF (sprites)
     if(files.sprite){
