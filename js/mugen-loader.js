@@ -66,20 +66,58 @@
    */
   function parseAir(text){
     const anims = {}; let cur = null;
+    // Boîtes de collision en attente : les blocs Clsn précèdent la frame
+    // à laquelle ils s'appliquent. "Default" vaut pour toute l'animation.
+    let pendHit = null, pendHurt = null, defHit = null, defHurt = null, fill = null;
+
     for(let raw of text.split(/\r?\n/)){
       const line = raw.replace(/;.*$/, '').trim();
       if(!line) continue;
+
       const head = line.match(/^\[\s*Begin\s+Action\s+(-?\d+)\s*\]$/i);
-      if(head){ cur = { no:Number(head[1]), frames:[], loopStart:0 }; anims[cur.no] = cur; continue; }
+      if(head){
+        cur = { no:Number(head[1]), frames:[], loopStart:0 };
+        anims[cur.no] = cur;
+        pendHit = pendHurt = defHit = defHurt = fill = null;
+        continue;
+      }
       if(!cur) continue;
       if(/^loopstart$/i.test(line)){ cur.loopStart = cur.frames.length; continue; }
-      if(/^(interpolate|clsn)/i.test(line)) continue;   // hitboxes : géré via CNS
+      if(/^interpolate/i.test(line)) continue;
+
+      // en-tête d'un bloc de boîtes : "Clsn1: 2", "Clsn2Default: 3".
+      // Les boîtes qui suivent s'écrivent "Clsn2[0] = …" même sous un
+      // en-tête Default : c'est donc l'en-tête qui fixe la destination.
+      const hdr = line.match(/^Clsn([12])(Default)?\s*:\s*(\d+)/i);
+      if(hdr){
+        const list = [];
+        if(hdr[2]){ if(hdr[1] === '1') defHit = list; else defHurt = list; }
+        else      { if(hdr[1] === '1') pendHit = list; else pendHurt = list; }
+        fill = list;
+        continue;
+      }
+      // une boîte : "Clsn2[0] = -10, 0, 19,-80"
+      const box = line.match(/^Clsn([12])(Default)?\s*\[\s*\d+\s*\]\s*=\s*(.+)$/i);
+      if(box){
+        const v = box[3].split(',').map(s => parseInt(s.trim(), 10));
+        if(v.length >= 4 && v.every(n => !isNaN(n))){
+          const rect = { x1:Math.min(v[0],v[2]), y1:Math.min(v[1],v[3]),
+                         x2:Math.max(v[0],v[2]), y2:Math.max(v[1],v[3]) };
+          if(fill) fill.push(rect);
+        }
+        continue;
+      }
+
       const p = line.split(',').map(s => s.trim());
       if(p.length >= 5 && /^-?\d+$/.test(p[0])){
         cur.frames.push({
           group:+p[0], image:+p[1], x:+p[2], y:+p[3], dur:+p[4],
-          flip:(p[5]||'').toLowerCase(), alpha:p[6]||null
+          flip:(p[5]||'').toLowerCase(), alpha:p[6]||null,
+          // boîtes propres à la frame, sinon celles par défaut de l'animation
+          hit:  pendHit  || defHit  || null,
+          hurt: pendHurt || defHurt || null
         });
+        pendHit = pendHurt = fill = null;   // consommées par cette frame
       }
     }
     return anims;

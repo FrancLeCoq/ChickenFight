@@ -242,7 +242,15 @@
     'changestate','selfstate','changeanim','changeanim2','velset','veladd','velmul',
     'posset','posadd','ctrlset','hitdef','poweradd','statetypeset','turn',
     'playsnd','varset','varadd','attackdist','width','sprpriority','afterimage',
-    'explod','removeexplod','nothitby','hitby','screenbound','destroyself','projectile'
+    'explod','removeexplod','nothitby','hitby','screenbound','destroyself','projectile',
+    // ── contrôleurs additionnels ──
+    'palfx','allpalfx','bgpalfx','afterimagetime','envshake','envcolor',
+    'targetbind','bindtoparent','bindtoroot','targetstate','targetveladd','targetvelset',
+    'targetlifeadd','targetpoweradd','targetdrop','hitoverride','reversaldef',
+    'lifeadd','lifeset','poweset','powerset','hitadd','hitfalldamage','hitfallvel',
+    'hitfallset','fallenvshake','makedust','gamemakeanim','pause','superpause',
+    'assertspecial','sndpan','stopsnd','removeexplod','angledraw','angleset',
+    'angleadd','anglemul','defencemulset','attackmulset','forcefeedback','null'
   ]);
 
   // Découpe "a, b, c" en nombres.
@@ -341,6 +349,42 @@
         case 'sprpriority': break;
         case 'playsnd': h.playSound(); break;
         case 'hitdef':  h.setHitDef(buildHitDef(p)); break;
+        // ── effets visuels et de scène ──
+        case 'palfx':
+        case 'allpalfx': {
+          const add = nums(p.add, 0), mul = nums(p.mul, 256);
+          h.palFx?.({ time:num(p.time)||10, add, mul,
+                      invert: /1|true/i.test(String(p.invertall ?? '')) });
+          break;
+        }
+        case 'envshake':     h.envShake?.(num(p.time)||8, num(p.ampl)||10); break;
+        case 'envcolor':     h.envColor?.(nums(p.value,255), num(p.time)||1); break;
+        case 'superpause':
+        case 'pause':        h.pause?.(num(p.time)||30); break;
+        case 'makedust':     h.dust?.(nums(p.pos,0)); break;
+        case 'afterimage':
+        case 'afterimagetime': h.afterImage?.(num(p.time ?? p.value) || 10); break;
+        // ── effets sur l'adversaire ciblé ──
+        case 'targetlifeadd':  h.targetLife?.(num(p.value)); break;
+        case 'targetpoweradd': h.targetPower?.(num(p.value)); break;
+        case 'targetveladd':   h.targetVel?.(num(p.x)||0, num(p.y)||0, true); break;
+        case 'targetvelset':   h.targetVel?.(num(p.x)||0, num(p.y)||0, false); break;
+        case 'targetstate':    h.targetState?.(parseInt(p.value,10)); break;
+        case 'targetbind':     h.targetBind?.(num(p.time)||1, nums(p.pos,0)); break;
+        case 'targetdrop':     h.targetDrop?.(); break;
+        // ── vie, jauge, multiplicateurs ──
+        case 'lifeadd':        h.addLife?.(num(p.value)); break;
+        case 'lifeset':        h.setLife?.(num(p.value)); break;
+        case 'powerset':
+        case 'poweset':        h.setPower?.(num(p.value)); break;
+        case 'attackmulset':   h.setAttackMul?.(num(p.value) || 1); break;
+        case 'defencemulset':  h.setDefenceMul?.(num(p.value) || 1); break;
+        // ── prises et parades ──
+        case 'hitoverride':    h.hitOverride?.(parseInt(p.stateno,10), num(p.time)||1); break;
+        case 'reversaldef':    h.reversalDef?.(buildHitDef(p)); break;
+        case 'hitfallset':     h.setFall?.(num(p.value) !== 0); break;
+        case 'hitfalldamage':  h.addLife?.(-Math.abs(num(p.value))); break;
+        case 'assertspecial':  h.assertSpecial?.(String(p.flag||'')); break;
         case 'projectile': h.spawnProjectile(buildHitDef(p), {
           id: num(p.projid), anim: parseInt(p.projanim ?? p.anim, 10),
           velX: nums(p.velocity)[0] || 4, velY: nums(p.velocity)[1] || 0,
