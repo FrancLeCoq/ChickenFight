@@ -1,0 +1,29 @@
+; Francis Le Coq — constantes
+[Data]
+life = 1000
+attack = 100
+defence = 100
+power = 3000
+
+[Size]
+xscale = 1
+yscale = 1
+ground.back = 20
+ground.front = 24
+air.back = 20
+air.front = 24
+height = 76
+
+[Velocity]
+walk.fwd = 2.4
+walk.back = -2.2
+run.fwd = 4.6, 0
+jump.neu = 0, -8.4
+jump.back = -2.55
+jump.fwd = 2.5
+
+[Movement]
+airjump.num = 1
+yaccel = .44
+stand.friction = .85
+crouch.friction = .82

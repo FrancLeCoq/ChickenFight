@@ -997,19 +997,25 @@
   // ══════════════ ARÈNE TEMPS RÉEL (moteur ChickenArena) ══════════════
   // Échelle d'évolution : le coq absorbe l'adversaire vaincu et « évolue »
   // en Valet, puis Reine, puis Roi, face à des adversaires plus coriaces.
+  // Toute l'échelle tourne au format MUGEN : le coq et ses évolutions comme
+  // le boss Ikemen GO passent par le même pipeline (.def/.sff/.air/.cns).
   const RT_LADDER = [
-    { player:'francis', enemy:'valet', ai:.30, php:200, ehp:180, epow:.9 },
-    { player:'valet',   enemy:'reine', ai:.52, php:210, ehp:210, epow:1.0 },
-    { player:'reine',   enemy:'roi',   ai:.72, php:225, ehp:245, epow:1.12 },
-    // Boss final : le coq passe lui aussi au format MUGEN et affronte
-    // un véritable personnage Ikemen GO, chargé depuis ses fichiers.
-    { player:'francisMugen', enemy:'kfm', ai:.85, php:240, ehp:260, epow:1.2, label:'BOSS' }
+    { player:'francisMugen', enemy:'valetMugen', ai:.30, php:200, ehp:180, epow:.9 },
+    { player:'valetMugen',   enemy:'reineMugen', ai:.52, php:210, ehp:210, epow:1.0 },
+    { player:'reineMugen',   enemy:'roiMugen',   ai:.72, php:225, ehp:245, epow:1.12 },
+    // Boss final : véritable personnage Ikemen GO, avec ses VRAIS coups
+    // exécutés depuis son .cns (Kung Fu Palm, etc.).
+    { player:'roiMugen',     enemy:'kfm720',     ai:.85, php:240, ehp:260, epow:1.2, label:'BOSS' }
   ];
   let rtStage = 0, rtBound = false, rtActive = false;
 
   // Nom affichable : les persos maison viennent de CHARACTERS, les persos
   // au format Ikemen GO ont leur propre nom dans leur fichier .def.
-  const RT_EXTRA_NAMES = { kfm:'Kung Fu Man', francisMugen:'Francis' };
+  const RT_EXTRA_NAMES = {
+    kfm:'Kung Fu Man', kfm720:'Kung Fu Man',
+    francisMugen:'Francis', valetMugen:'Le Valet',
+    reineMugen:'La Reine', roiMugen:'Le Roi'
+  };
   function rtName(id){ return CHARACTERS[id] ? characterName(id) : (RT_EXTRA_NAMES[id] || id); }
 
   function openRealtime(){
@@ -1051,7 +1057,8 @@
       }else{
         confetti(); playSound('win'); haptic('success');
         const next = RT_LADDER[rtStage+1];
-        showModal(`<div style="font-size:52px">🐔➡️${next.player==='valet'?'🎴':next.player==='reine'?'👸':'👑'}</div>
+        const evoIcon = { valetMugen:'🎴', reineMugen:'👸', roiMugen:'👑' }[next.player] || '🐓';
+        showModal(`<div style="font-size:52px">🐔➡️${evoIcon}</div>
           <h2>ÉVOLUTION !</h2>
           <p>Victoire sur ${rtName(cfg.enemy)} ! Ton coq évolue en <b>${rtName(next.player)}</b> et affronte <b>${rtName(next.enemy)}</b>.</p>
           <div class="modal-actions">

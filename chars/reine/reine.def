@@ -1,0 +1,14 @@
+; La Reine — personnage ChickenFight
+[Info]
+name = "La Reine"
+displayname = "La Reine"
+versiondate = 1.0
+mugenversion = 1.0
+author = "ChickenFight"
+pal.defaults = 1
+
+[Files]
+cmd = reine.cmd
+cns = reine.cns
+sprite = reine.sff
+anim = reine.air

@@ -1,6 +1,38 @@
-const CACHE = 'chickenfight-v1.9.0';
+const CACHE = 'chickenfight-v2.1.0';
 // Core files change on every deploy → served network-first so updates show up.
-const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/netcode.js', 'manifest.webmanifest'];
+const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
+const CHARS = [
+  'chars/francis/francis.def',
+  'chars/francis/francis.sff',
+  'chars/francis/francis.air',
+  'chars/francis/francis.cmd',
+  'chars/francis/francis.cns',
+  'chars/valet/valet.def',
+  'chars/valet/valet.sff',
+  'chars/valet/valet.air',
+  'chars/valet/valet.cmd',
+  'chars/valet/valet.cns',
+  'chars/reine/reine.def',
+  'chars/reine/reine.sff',
+  'chars/reine/reine.air',
+  'chars/reine/reine.cmd',
+  'chars/reine/reine.cns',
+  'chars/roi/roi.def',
+  'chars/roi/roi.sff',
+  'chars/roi/roi.air',
+  'chars/roi/roi.cmd',
+  'chars/roi/roi.cns',
+  'chars/kfm/kfm.def',
+  'chars/kfm/kfm.sff',
+  'chars/kfm/kfm.air',
+  'chars/kfm/kfm.cmd',
+  'chars/kfm/kfm.cns',
+  'chars/kfm720/kfm720.def',
+  'chars/kfm720/kfm720.sff',
+  'chars/kfm720/kfm720.air',
+  'chars/kfm720/kfm720.cmd',
+  'chars/kfm720/kfm720.cns'
+];
 // Static assets rarely change → cache-first for speed / offline.
 const ASSETS = [
   'assets/francis-default.webp', 'assets/francis-happy.webp', 'assets/francis-sad.webp',
@@ -11,7 +43,7 @@ const ASSETS = [
 
 self.addEventListener('install', event =>
   event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll([...CORE, ...ASSETS])).then(() => self.skipWaiting())
+    caches.open(CACHE).then(cache => cache.addAll([...CORE, ...ASSETS]).then(()=>caches.open(CACHE).then(c=>Promise.allSettled(CHARS.map(u=>c.add(u)))))).then(() => self.skipWaiting())
   )
 );
 

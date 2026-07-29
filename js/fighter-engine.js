@@ -32,9 +32,14 @@
     roi:   { rigged:false, srcW:660, srcH:900, scale:0.215, layers:{ body:'assets/roi.webp' } },
     // Personnage au format Ikemen GO / MUGEN : sprites et animations chargés
     // depuis ses propres fichiers (.def/.sff/.air).
-    kfm:   { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
-    // Francis converti au format MUGEN : même pipeline que les persos Ikemen GO.
-    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 }
+    kfm:    { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
+    kfm720: { mugen:true, def:'chars/kfm720/kfm720.def', scale:0.44 },
+    // Le coq et ses évolutions, convertis au format MUGEN : ils passent
+    // exactement par le même pipeline que les personnages Ikemen GO.
+    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 },
+    valetMugen:   { mugen:true, def:'chars/valet/valet.def',     scale:0.95 },
+    reineMugen:   { mugen:true, def:'chars/reine/reine.def',     scale:0.95 },
+    roiMugen:     { mugen:true, def:'chars/roi/roi.def',         scale:1.00 }
   };
   const mugenCache = {};   // id → personnage chargé
 
@@ -64,7 +69,7 @@
   };
 
   // ── État module ──
-  let cv, ctx, raf = null, acc = 0, last = 0, freezeT = 0;
+  let cv, ctx, raf = null, acc = 0, last = 0, freezeT = 0, gameFrame = 0;
   let fighters = [], projectiles = [], fx = [];
   let input = blankInput(), keyState = {};
   let round = { n:1, wins:[0,0], timer:99*FPS, state:'intro', stateT:0, best:2 };
@@ -79,6 +84,15 @@
   }
   function preload(ids){
     ids.forEach(id => { const r = RENDER[id]; if(r && r.layers) Object.values(r.layers).forEach(loadImage); });
+  }
+
+  /** Attache une machine d'états CNS au combattant si son perso en fournit. */
+  function attachCns(f){
+    const ch = f.mugen;
+    if(!ch || !ch.states || !window.ChickenCns) return;
+    if(!Object.keys(ch.states).length) return;
+    f.cns = new window.ChickenCns.CnsRuntime(ch.states, makeCnsHost(f));
+    f.cns.states = ch.states;
   }
 
   /** Charge (une seule fois) les personnages au format MUGEN nécessaires. */
@@ -112,6 +126,10 @@
       // animateur MUGEN si le personnage vient d'un .def
       mugen: mugenCache[id] || null,
       anim: mugenCache[id] && window.ChickenMugen ? new window.ChickenMugen.Animator(mugenCache[id]) : null,
+      // état CNS (personnages MUGEN exécutant leurs vrais coups)
+      cns:null, cnsCtrl:true, cnsStateType:'S', cnsMoveType:'I', cnsPhysics:'S',
+      cnsJuggle:1, hitDef:null, hitDefUsed:false,
+      moveContact:0, moveHit:0, moveGuarded:0, lastCommand:'',
       combo:0, comboT:0,      // compteur de combo + fenêtre
       juggle:0,               // points de juggle restants (limite les combos aériens)
       invuln:0,               // frames d'invincibilité
@@ -181,10 +199,12 @@
     if(round.timer>0) round.timer--;
 
     const p = fighters[0], e = fighters[1];
+    gameFrame++;
     const pin = readInput();
     const ein = aiInput(e, p);
     updateFighter(p, pin, e);
     updateFighter(e, ein, p);
+    updateCns(p, e); updateCns(e, p);
     resolvePush(p, e);
     updateProjectiles();
     updateFx();
@@ -253,6 +273,13 @@
   }
 
   function startAttack(f, moveName){
+    // Personnage MUGEN : on exécute son VRAI état d'attaque (frame data et
+    // HitDef issus de son .cns) plutôt que la table de coups du moteur.
+    if(f.cns && startCnsAttack(f, moveName)){
+      if(MOVES[moveName]?.label) banner(MOVES[moveName].label, MOVES[moveName].super?'super':'move');
+      if(MOVES[moveName]?.super) freeze(MOVES[moveName].freeze||30);
+      return;
+    }
     f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false; f.hitCount=0;
     if(f.move.projectile){ f.spawned=false; }
     if(f.move.invuln) f.invuln = f.move.invuln;
@@ -261,6 +288,19 @@
     else if(f.move.special) playBeep('special');
   }
   function runAttack(f, opp){
+    // Attaque pilotée par le CNS : c'est le HitDef du personnage qui décide.
+    if(f.cns && f.hitDef){
+      if(!f.hitDefUsed){
+        const reach = 60 + (f.hitDef.attr.includes('A') ? 10 : 0);
+        if(Math.abs(opp.x - f.x) < reach && Math.abs(opp.y - f.y) < 130){
+          applyCnsHit(f, opp, f.hitDef);
+          f.hitDefUsed = true; f.moveContact = 1; f.moveHit = 1;
+        }
+      }
+      f.vx *= 0.92;
+      return;
+    }
+    if(f.cns){ f.vx *= 0.92; return; }   // état CNS sans HitDef actif
     const m = f.move;
     if(m.projectile){
       if(f.st===m.startup && !f.spawned){ spawnEgg(f); f.spawned=true; }
@@ -319,6 +359,134 @@
 
   function setState(f, s){ if(f.state!==s){ f.state=s; f.st=0; } }
 
+  /**
+   * Applique un HitDef issu d'un .cns : les dégâts, le hitstun et la
+   * projection viennent des vraies valeurs du personnage.
+   * Échelle : la vie MUGEN est sur 1000, la nôtre sur maxHp.
+   */
+  function applyCnsHit(att, def, hd){
+    if(def.invuln > 0){ spawnSpark(def.x, GROUND-90, 'block'); return; }
+    const blocking = def.state === 'block' || def.blockHold;
+    spawnSpark((def.x + att.x)/2, GROUND - 70, blocking ? 'block' : 'hit');
+
+    const scaleHp = def.maxHp / 1000;               // 23 dégâts MUGEN → ~4 chez nous
+    if(blocking){
+      def.hp -= Math.max(0, Math.round(hd.guardDamage * scaleHp));
+      def.vx = 0.5 * Math.abs(hd.groundVelX) * (-def.facing);
+      def.stun = hd.guardHitTime || 8;
+      setState(def, 'hitstun'); att.combo = 0; att.moveGuarded = 1;
+      shake(4); return;
+    }
+    if(!def.onGround && def.juggle <= 0) return;
+    if(!def.onGround) def.juggle -= 1; else def.juggle = hd.juggle || 2;
+
+    att.combo = (att.comboT > 0 ? att.combo : 0) + 1;
+    att.comboT = 60;
+    const scale = att.combo <= 1 ? 1 : Math.max(0.30, 1 - (att.combo-1)*0.11);
+    const dmg = Math.max(1, Math.round(hd.damage * scaleHp * att.power / def.defense * scale));
+
+    def.hp -= dmg; def.flash = 6;
+    if(def.onGround){
+      def.vx = (hd.groundVelX/2) * (-def.facing);
+      def.stun = hd.hitTime || 12;
+      if(hd.fall || hd.groundType === 'Trip'){ def.vy = hd.airVelY || -6; def.onGround = false; }
+    } else {
+      def.vx = (hd.airVelX/2) * (-def.facing);
+      def.vy = hd.airVelY || -3;
+      def.stun = hd.airHitTime || 15;
+    }
+    setState(def, 'hitstun'); def.buffer = []; def.cmd?.reset();
+    def.combo = 0; def.comboT = 0;
+    att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
+    def.meter = clampN(def.meter + 3, 0, 100);
+    // pausetime du HitDef → hitstop, comme dans MUGEN
+    if(hd.pauseTime > 0) freeze(Math.min(12, hd.pauseTime));
+    shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
+    popDamage(def.x, GROUND-120, dmg);
+    if(att.combo >= 2) popCombo(att);
+  }
+
+  // ══════════ Pont vers l'interpréteur CNS ══════════
+  // Les personnages MUGEN exécutent leurs VRAIS états d'attaque (frame data,
+  // vélocités et HitDef issus de leur .cns). La locomotion (marche, saut,
+  // garde) reste gérée par le moteur : ces états communs vivent normalement
+  // dans le common1.cns du moteur, pas dans le fichier du personnage.
+  const CNS_ATTACKS = { peck:200, wing:210, kick:230, heavy:240, dp:1000, qcb:1010, super:3000, egg:1000 };
+
+  function makeCnsHost(f){
+    return {
+      setAnim(no){ f.anim?.play(no, true); },
+      setVel(x, y){ if(x!=null) f.vx = x*f.facing; if(y!=null) f.vy = y; },
+      addVel(x, y){ f.vx += (x||0)*f.facing; f.vy += (y||0); },
+      mulVel(x, y){ f.vx *= (x??1); f.vy *= (y??1); },
+      setPos(x, y){ if(x!=null) f.x = x; if(y!=null) f.y = GROUND + y; },
+      addPos(x, y){ f.x += (x||0)*f.facing; f.y += (y||0); },
+      setCtrl(v){ f.cnsCtrl = !!v; },
+      addPower(v){ f.meter = clampN(f.meter + v/30, 0, 100); },
+      setStateType(t){ f.cnsStateType = t; },
+      setMoveType(t){ f.cnsMoveType = t; if(t === 'I'){ f.hitDef = null; } },
+      setPhysics(t){ f.cnsPhysics = t; },
+      setJuggle(v){ f.cnsJuggle = v; },
+      setAttackDist(){},
+      turn(){ f.facing *= -1; },
+      playSound(){ playBeep('hit'); },
+      // HitDef : le coup devient actif jusqu'à ce qu'il touche ou que l'état change.
+      setHitDef(hd){ f.hitDef = hd; f.hitDefUsed = false; },
+      spawnProjectile(hd, cfg){
+        projectiles.push({ x:f.x + (cfg.offX||0)*f.facing, y:GROUND - 78 + (cfg.offY||0),
+          vx:(cfg.velX||4)*f.facing, owner:f, life:cfg.removeTime>0?cfg.removeTime:120, rot:0, hitDef:hd });
+        playBeep('egg');
+      }
+    };
+  }
+  const clampN = (n,a,b) => Math.max(a, Math.min(b, n));
+
+  /** Construit le contexte d'évaluation des déclencheurs CNS. */
+  function cnsContext(f, opp){
+    const frames = f.anim?.anim?.frames || [];
+    const total = frames.reduce((s,fr)=> s + (fr.dur>0?fr.dur:0), 0);
+    const elapsed = frames.slice(0, f.anim?.i || 0).reduce((s,fr)=> s + (fr.dur>0?fr.dur:0), 0) + (f.anim?.t || 0);
+    return {
+      anim: f.anim?.no ?? 0,
+      animElem: (f.anim?.i ?? 0) + 1,               // MUGEN indexe à partir de 1
+      animElemTime: f.anim?.t ?? 0,
+      animTime: total > 0 ? elapsed - total : 0,     // 0 = animation terminée
+      ctrl: f.cnsCtrl, alive: f.hp > 0,
+      life: Math.max(0, Math.round(f.hp/f.maxHp*1000)),
+      power: Math.round(f.meter*30),
+      moveContact: f.moveContact, moveHit: f.moveHit, moveGuarded: f.moveGuarded,
+      moveType: f.cnsMoveType || 'I', stateType: f.cnsStateType || 'S',
+      velX: f.vx*f.facing, velY: f.vy,
+      posX: f.x, posY: f.y - GROUND,
+      p2dist: Math.abs(opp.x - f.x) - 40,
+      facing: f.facing, gameTime: gameFrame, roundState: round.state==='fight'?2:1,
+      hitShakeOver: true, hitOver: f.state!=='hitstun', hitFall: !f.onGround,
+      currentCommand: f.lastCommand || '',
+      command: n => (f.lastCommand && String(n).toLowerCase() === f.lastCommand.toLowerCase()) ? 1 : 0,
+      numProj: projectiles.filter(p => p.owner === f).length,
+      numTarget: f.moveContact ? 1 : 0
+    };
+  }
+
+  /** Fait tourner la machine d'états CNS d'un combattant. */
+  function updateCns(f, opp){
+    if(!f.cns) return;
+    f.cns.update(cnsContext(f, opp));
+    // Retour en état neutre quand l'attaque est finie et que le contrôle revient.
+    if(f.cnsCtrl && f.state === 'attack'){ setState(f, 'idle'); f.move = null; f.hitDef = null; }
+  }
+
+  /** Déclenche l'attaque CNS correspondant à un coup du moteur. */
+  function startCnsAttack(f, moveName){
+    const no = CNS_ATTACKS[moveName];
+    if(no == null || !f.cns.states[no]) return false;
+    f.state = 'attack'; f.st = 0; f.move = MOVES[moveName] || MOVES.peck;
+    f.moveContact = 0; f.moveHit = 0; f.moveGuarded = 0;
+    f.cnsCtrl = false; f.hitDef = null;
+    f.cns.changeState(no);
+    return true;
+  }
+
   /** Traduit l'état du moteur en numéro d'animation MUGEN standard. */
   function mugenAnimFor(f){
     const A = window.ChickenMugen.ANIM;
@@ -346,6 +514,8 @@
   /** Avance l'animation MUGEN en suivant l'état courant. */
   function updateMugenAnim(f){
     if(!f.anim) return;
+    // Pendant une attaque CNS, c'est le .cns qui choisit l'animation.
+    if(f.cns && f.state === 'attack'){ f.anim.tick(); return; }
     const no = mugenAnimFor(f);
     // une attaque relance son animation depuis le début
     const restart = f.state==='attack' && f.st<=1;
@@ -639,6 +809,8 @@
       const P = o.playerStats||{hp:200,power:1,defense:1};
       const E = o.enemyStats||{hp:200,power:1,defense:1,ai:o.aiLevel??0.4};
       fighters=[ makeFighter(o.playerId,0,P), makeFighter(o.enemyId,1,{...E, ai:E.ai}) ];
+      fighters.forEach(attachCns);
+      gameFrame = 0;
       projectiles=[]; fx=[]; keyState={}; this._touch=blankInput(); this._shake=0;
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       running=true; last=0; acc=0;
