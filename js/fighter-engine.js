@@ -29,8 +29,14 @@
       headPivot:{x:0.62,y:0.52}, tailPivot:{x:0.36,y:0.52} },
     valet: { rigged:false, srcW:690, srcH:900, scale:0.205, layers:{ body:'assets/valet.webp' } },
     reine: { rigged:false, srcW:606, srcH:900, scale:0.205, layers:{ body:'assets/reine.webp' } },
-    roi:   { rigged:false, srcW:660, srcH:900, scale:0.215, layers:{ body:'assets/roi.webp' } }
+    roi:   { rigged:false, srcW:660, srcH:900, scale:0.215, layers:{ body:'assets/roi.webp' } },
+    // Personnage au format Ikemen GO / MUGEN : sprites et animations chargés
+    // depuis ses propres fichiers (.def/.sff/.air).
+    kfm:   { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
+    // Francis converti au format MUGEN : même pipeline que les persos Ikemen GO.
+    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 }
   };
+  const mugenCache = {};   // id → personnage chargé
 
   // ── Frame data des coups (frames @60fps) ──
   // reach/box en unités monde, relatifs au combattant (devant = +x*facing).
@@ -72,7 +78,17 @@
     const im = new Image(); im.src = src; images[src] = im; return im;
   }
   function preload(ids){
-    ids.forEach(id => { const r = RENDER[id]; if(r) Object.values(r.layers).forEach(loadImage); });
+    ids.forEach(id => { const r = RENDER[id]; if(r && r.layers) Object.values(r.layers).forEach(loadImage); });
+  }
+
+  /** Charge (une seule fois) les personnages au format MUGEN nécessaires. */
+  async function preloadMugen(ids){
+    for(const id of ids){
+      const r = RENDER[id];
+      if(!r || !r.mugen || mugenCache[id]) continue;
+      try{ mugenCache[id] = await window.ChickenMugen.loadCharacter(r.def); }
+      catch(e){ console.warn('[ChickenArena] perso MUGEN indisponible:', id, e.message); }
+    }
   }
 
   // ── Fabrique un combattant ──
@@ -93,6 +109,9 @@
       flash:0,
       // ── systèmes Ikemen GO ──
       cmd: window.ChickenCommand ? new window.ChickenCommand.CommandBuffer(window.ChickenCommand.roosterCommands()) : null,
+      // animateur MUGEN si le personnage vient d'un .def
+      mugen: mugenCache[id] || null,
+      anim: mugenCache[id] && window.ChickenMugen ? new window.ChickenMugen.Animator(mugenCache[id]) : null,
       combo:0, comboT:0,      // compteur de combo + fenêtre
       juggle:0,               // points de juggle restants (limite les combos aériens)
       invuln:0,               // frames d'invincibilité
@@ -188,6 +207,7 @@
     const prevDir = f.buffer.length?f.buffer[f.buffer.length-1].d:5;
     pushBuffer(f, inp, prevDir);
     if(f.cmd) f.cmd.update(inp, f.facing);
+    updateMugenAnim(f);
 
     // états qui verrouillent le contrôle
     if(f.state==='ko'){ physics(f); return; }
@@ -298,6 +318,40 @@
   }
 
   function setState(f, s){ if(f.state!==s){ f.state=s; f.st=0; } }
+
+  /** Traduit l'état du moteur en numéro d'animation MUGEN standard. */
+  function mugenAnimFor(f){
+    const A = window.ChickenMugen.ANIM;
+    if(f.state==='ko')      return f.onGround ? A.down : A.fall;
+    if(f.state==='hitstun') return f.onGround ? A.hitHigh : A.fall;
+    if(f.state==='block')   return A.guardStand;
+    if(f.state==='crouch')  return A.crouch;
+    if(f.state==='jump' || f.state==='fall') return f.vy<0 ? A.jumpUp : A.jumpDown;
+    if(f.state==='walk')    return (f.vx*f.facing)>0 ? A.walkFwd : A.walkBack;
+    if(f.state==='attack'){
+      switch(f.move?.name){
+        case 'peck':  return A.lightPunch;
+        case 'wing':  return A.strongPunch;
+        case 'kick':  return A.lightKick;
+        case 'dp':    return A.strongPunch;
+        case 'qcb':   return A.strongKick;
+        case 'egg':   return A.lightKick;
+        case 'super': return A.strongPunch;
+      }
+      return A.lightPunch;
+    }
+    return A.stand;
+  }
+
+  /** Avance l'animation MUGEN en suivant l'état courant. */
+  function updateMugenAnim(f){
+    if(!f.anim) return;
+    const no = mugenAnimFor(f);
+    // une attaque relance son animation depuis le début
+    const restart = f.state==='attack' && f.st<=1;
+    f.anim.play(no, restart);
+    f.anim.tick();
+  }
 
   function physics(f){
     f.x += f.vx; f.y += f.vy;
@@ -426,6 +480,7 @@
   }
 
   function drawFighter(f){
+    if(f.r.mugen){ drawMugenFighter(f); return; }
     const r=f.r, h = r.srcH*r.scale, w = r.srcW*r.scale;
     ctx.save();
     ctx.translate(f.x, GROUND);
@@ -464,6 +519,30 @@
     }
     // teinte de flash (touché)
     if(f.flash>0){ ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(255,80,80,'+(f.flash/10)+')'; ctx.fillRect(-w/2,-h,w,h); ctx.globalCompositeOperation='source-over'; }
+    ctx.restore();
+  }
+
+  /** Dessine un personnage MUGEN : sprite courant aligné sur son axe. */
+  function drawMugenFighter(f){
+    const frame = f.anim && f.anim.current();
+    if(!frame){ return; }
+    const sc = f.r.scale || 1.5;
+    const s = frame.sprite, img = s.canvas;
+    ctx.save();
+    ctx.translate(f.x, GROUND);
+    ctx.scale(f.facing * sc, sc);
+    // L'axe du sprite MUGEN est son point d'ancrage au sol.
+    const flipX = /h/i.test(frame.flip) ? -1 : 1;
+    const flipY = /v/i.test(frame.flip) ? -1 : 1;
+    if(flipX < 0 || flipY < 0) ctx.scale(flipX, flipY);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
+    if(f.flash>0){
+      ctx.globalCompositeOperation='source-atop';
+      ctx.fillStyle='rgba(255,90,90,'+(f.flash/12)+')';
+      ctx.fillRect(-s.x + frame.x, -s.y + frame.y, img.width, img.height);
+      ctx.globalCompositeOperation='source-over';
+    }
     ctx.restore();
   }
 
@@ -553,9 +632,10 @@
   // ══════════════ API PUBLIQUE ══════════════
   const ChickenArena = {
     _touch: blankInput(), _shake:0, muted:false,
-    start(o){
+    async start(o){
       opts=o; cv=o.canvas; ctx=cv.getContext('2d');
       preload([o.playerId, o.enemyId]);
+      await preloadMugen([o.playerId, o.enemyId]);
       const P = o.playerStats||{hp:200,power:1,defense:1};
       const E = o.enemyStats||{hp:200,power:1,defense:1,ai:o.aiLevel??0.4};
       fighters=[ makeFighter(o.playerId,0,P), makeFighter(o.enemyId,1,{...E, ai:E.ai}) ];

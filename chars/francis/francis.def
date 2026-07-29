@@ -1,0 +1,14 @@
+; Francis Le Coq — personnage ChickenFight
+[Info]
+name = "Francis"
+displayname = "Francis Le Coq"
+versiondate = 1.0
+mugenversion = 1.0
+author = "ChickenFight"
+pal.defaults = 1
+
+[Files]
+cmd = francis.cmd
+cns = francis.cns
+sprite = francis.sff
+anim = francis.air

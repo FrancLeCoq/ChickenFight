@@ -1000,9 +1000,17 @@
   const RT_LADDER = [
     { player:'francis', enemy:'valet', ai:.30, php:200, ehp:180, epow:.9 },
     { player:'valet',   enemy:'reine', ai:.52, php:210, ehp:210, epow:1.0 },
-    { player:'reine',   enemy:'roi',   ai:.72, php:225, ehp:245, epow:1.12 }
+    { player:'reine',   enemy:'roi',   ai:.72, php:225, ehp:245, epow:1.12 },
+    // Boss final : le coq passe lui aussi au format MUGEN et affronte
+    // un véritable personnage Ikemen GO, chargé depuis ses fichiers.
+    { player:'francisMugen', enemy:'kfm', ai:.85, php:240, ehp:260, epow:1.2, label:'BOSS' }
   ];
   let rtStage = 0, rtBound = false, rtActive = false;
+
+  // Nom affichable : les persos maison viennent de CHARACTERS, les persos
+  // au format Ikemen GO ont leur propre nom dans leur fichier .def.
+  const RT_EXTRA_NAMES = { kfm:'Kung Fu Man', francisMugen:'Francis' };
+  function rtName(id){ return CHARACTERS[id] ? characterName(id) : (RT_EXTRA_NAMES[id] || id); }
 
   function openRealtime(){
     rtStage = 0;
@@ -1014,7 +1022,8 @@
   function startRtStage(){
     if(!window.ChickenArena){ toast('Moteur indisponible'); return; }
     const cfg = RT_LADDER[rtStage];
-    $('#rtLadderBadge').textContent = `ÉVOLUTION ${rtStage+1}/3 — ${characterName(cfg.player).toUpperCase()} vs ${characterName(cfg.enemy).toUpperCase()}`;
+    const badge = cfg.label ? cfg.label : `ÉVOLUTION ${rtStage+1}/${RT_LADDER.length}`;
+    $('#rtLadderBadge').textContent = `${badge} — ${rtName(cfg.player).toUpperCase()} vs ${rtName(cfg.enemy).toUpperCase()}`;
     const canvas = $('#rtCanvas');
     ChickenArena.muted = !soundEnabled;
     ChickenArena.resetTouch();
@@ -1044,7 +1053,7 @@
         const next = RT_LADDER[rtStage+1];
         showModal(`<div style="font-size:52px">🐔➡️${next.player==='valet'?'🎴':next.player==='reine'?'👸':'👑'}</div>
           <h2>ÉVOLUTION !</h2>
-          <p>Victoire sur ${characterName(cfg.enemy)} ! Ton coq évolue en <b>${characterName(next.player)}</b> et affronte <b>${characterName(next.enemy)}</b>.</p>
+          <p>Victoire sur ${rtName(cfg.enemy)} ! Ton coq évolue en <b>${rtName(next.player)}</b> et affronte <b>${rtName(next.enemy)}</b>.</p>
           <div class="modal-actions">
             <button class="modal-btn green" data-modal-action="rtNext">CONTINUER</button>
             <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
@@ -1054,7 +1063,7 @@
       playSound('lose'); haptic('error');
       showModal(`<img class="result-rooster" src="assets/francis-sad.webp" alt="">
         <h2>${tr('defeat')}</h2>
-        <p>${characterName(cfg.enemy)} t'a dominé. Réessaie ce palier d'évolution.</p>
+        <p>${rtName(cfg.enemy)} t'a dominé. Réessaie ce palier d'évolution.</p>
         <div class="modal-actions">
           <button class="modal-btn green" data-modal-action="rtRetry">${tr('replay')}</button>
           <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
