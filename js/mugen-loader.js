@@ -426,8 +426,72 @@
     return out;
   }
 
+  // ─────────── Lecteur d'animations (.AIR) ───────────
+  /**
+   * Joue une animation MUGEN : avance dans les frames selon leur durée,
+   * gère le bouclage sur "Loopstart" et les frames finales (durée -1).
+   */
+  class Animator {
+    constructor(character){ this.char = character; this.anim = null; this.no = -1; this.i = 0; this.t = 0; }
+
+    /** Change d'animation. force=true redémarre même si c'est la même. */
+    play(no, force=false){
+      if(this.no === no && !force) return;
+      const a = this.char.anims[no];
+      if(!a || !a.frames.length) return;          // animation absente → on garde l'actuelle
+      this.no = no; this.anim = a; this.i = 0; this.t = 0;
+    }
+
+    /** Avance d'une frame de jeu. Renvoie true si l'animation est terminée. */
+    tick(){
+      if(!this.anim) return true;
+      const f = this.anim.frames[this.i];
+      if(!f) return true;
+      if(f.dur < 0) return true;                  // frame finale : on reste dessus
+      this.t++;
+      if(this.t >= f.dur){
+        this.t = 0;
+        this.i++;
+        if(this.i >= this.anim.frames.length){
+          this.i = this.anim.loopStart || 0;      // bouclage
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /** Frame courante : { sprite, x, y, flip } ou null. */
+    current(){
+      if(!this.anim) return null;
+      const f = this.anim.frames[this.i];
+      if(!f) return null;
+      const s = this.char.sprite(f.group, f.image);
+      if(!s) return null;
+      return { sprite:s, x:f.x, y:f.y, flip:f.flip || '' };
+    }
+
+    /** true si l'animation a fait au moins un tour complet. */
+    get finished(){
+      if(!this.anim) return true;
+      const last = this.anim.frames[this.anim.frames.length-1];
+      return this.i >= this.anim.frames.length-1 && (last?.dur < 0 || this.t >= (last?.dur||1));
+    }
+  }
+
+  // Numéros d'animation standard MUGEN (respectés par la quasi-totalité des persos).
+  const ANIM = {
+    stand:0, crouch:11, walkFwd:20, walkBack:21,
+    jumpStart:40, jumpUp:41, jumpDown:43, landing:47,
+    guardStand:130, guardCrouch:131, guardAir:132,
+    hitHigh:5000, hitLow:5010, fall:5030, down:5110, getUp:5120,
+    lightPunch:200, strongPunch:210, lightKick:230, strongKick:240,
+    crouchPunch:400, crouchKick:430,
+    special:1000, super:3000, win:180, lose:170, intro:190
+  };
+
   window.ChickenMugen = {
     loadCharacter, parseIni, parseAir, parseCmd, parseSff,
-    parseCommandString, decodePcx
+    parseCommandString, decodePcx, Animator, ANIM,
+    rle8Decode, rle5Decode, lz5Decode
   };
 })();
