@@ -32,7 +32,9 @@
     roi:   { rigged:false, srcW:660, srcH:900, scale:0.215, layers:{ body:'assets/roi.webp' } },
     // Personnage au format Ikemen GO / MUGEN : sprites et animations chargés
     // depuis ses propres fichiers (.def/.sff/.air).
-    kfm:   { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 }
+    kfm:   { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
+    // Francis converti au format MUGEN : même pipeline que les persos Ikemen GO.
+    francisMugen: { mugen:true, def:'chars/francis/francis.def', scale:0.95 }
   };
   const mugenCache = {};   // id → personnage chargé
 

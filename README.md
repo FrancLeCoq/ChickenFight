@@ -112,8 +112,29 @@ Un jeu de fixtures au format réel se trouve dans `testchar/` pour valider les p
 
 Les décompresseurs **LZ5 / RLE8 / RLE5** sont portés fidèlement depuis la source d'Ikemen GO (`src/image.go`, licence MIT).
 
-> ⚠️ **Licences — à trancher avant toute exploitation commerciale.**
-> Le **moteur** Ikemen GO est sous MIT (réutilisable librement), mais les **assets d'Elecbyte** (dont Kung Fu Man) sont distribués sous **Creative Commons 3.0 Non-Commercial**. La clause « non commercial » est **incompatible avec un jeu à paris en $FRANC**. Pour une version monétisée, il faudra soit obtenir une autorisation, soit utiliser des personnages libres de droits commerciaux, soit créer les siens (le coq, ses évolutions Valet/Reine/Roi). Chaque personnage MUGEN tiers a par ailleurs son propre auteur et ses propres conditions.
+### Le coq est lui aussi un personnage MUGEN
+
+`tools/build-rooster-mugen.py` convertit Francis en **véritable personnage au format M.U.G.E.N / Ikemen GO**, généré depuis son rig 3 couches :
+
+- **26 poses** composées par transformation du rig (bec qui pique, garde, coup d'aile, coup de patte, saut, K.O.) ;
+- quantification sur une **palette 256 couleurs** (index 0 transparent), encodage **PCX RLE**, écriture d'un **SFF v1** authentique ;
+- `francis.air` aux **numéros d'animation standard MUGEN** (0 attente, 20 marche, 200 poing, 5000 touché, 5110 au sol…), plus `.cmd`, `.cns` et `.def`.
+
+```bash
+python3 tools/build-rooster-mugen.py     # régénère chars/francis/
+```
+
+Le personnage produit est relu par le chargeur du jeu (aller-retour vérifié) et suit **exactement le même pipeline** que Kung Fu Man — il est donc en principe utilisable dans le vrai Ikemen GO natif.
+
+### Licences
+
+Le projet est développé **sans exploitation commerciale** (les paris en $FRANC sont écartés pour le moment), ce qui est compatible avec les licences en présence :
+
+- **moteur** Ikemen GO : MIT — les décompresseurs LZ5/RLE portés ici en découlent ;
+- **assets Elecbyte** (Kung Fu Man) : Creative Commons 3.0 **Non-Commercial** — usage non commercial uniquement ;
+- **Francis Le Coq** et ses évolutions : création propre au projet.
+
+> ⚠️ Si le jeu devait être monétisé un jour (paris, achats), la clause « non commercial » des assets Elecbyte deviendrait bloquante : il faudrait une autorisation, des personnages libres de droits commerciaux, ou s'en tenir aux personnages maison. Chaque personnage MUGEN tiers a par ailleurs son propre auteur et ses propres conditions.
 
 ## Roadmap
 
