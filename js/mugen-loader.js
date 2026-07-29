@@ -213,12 +213,116 @@
     return sprites;
   }
 
+  // ── Décompresseurs SFF v2 ──────────────────────────────────────
+  // Portés fidèlement depuis Ikemen GO (src/image.go, licence MIT).
+
+  function rle8Decode(rle, size){
+    const p = new Uint8Array(size);
+    if(!rle.length) return p;
+    let i = 0, j = 0;
+    while(j < size){
+      let n = 1, d = rle[i];
+      if(i < rle.length-1) i++;
+      if((d & 0xc0) === 0x40){
+        n = d & 0x3f;
+        d = rle[i];
+        if(i < rle.length-1) i++;
+      }
+      for(; n > 0; n--){ if(j < size) p[j++] = d; }
+    }
+    return p;
+  }
+
+  function rle5Decode(rle, size){
+    const p = new Uint8Array(size);
+    if(!rle.length) return p;
+    let i = 0, j = 0;
+    while(j < size){
+      let rl = rle[i];
+      if(i < rle.length-1) i++;
+      let dl = rle[i] & 0x7f;
+      let c = 0;
+      if(rle[i] >> 7 !== 0){
+        if(i < rle.length-1) i++;
+        c = rle[i];
+      }
+      if(i < rle.length-1) i++;
+      for(;;){
+        if(j < size) p[j++] = c;
+        rl--;
+        if(rl < 0){
+          dl--;
+          if(dl < 0) break;
+          c = rle[i] & 0x1f;
+          rl = rle[i] >> 5;
+          if(i < rle.length-1) i++;
+        }
+      }
+    }
+    return p;
+  }
+
+  function lz5Decode(rle, size){
+    const p = new Uint8Array(size);
+    if(!rle.length) return p;
+    let i = 0, j = 0, n = 0;
+    let ct = rle[i], cts = 0, rb = 0, rbc = 0;
+    if(i < rle.length-1) i++;
+    while(j < size){
+      let d = rle[i];
+      if(i < rle.length-1) i++;
+      if(ct & (1 << cts)){
+        // paquet LZ : recopie une séquence déjà écrite
+        if((d & 0x3f) === 0){
+          d = ((d << 2 | rle[i]) + 1) & 0xffff;
+          if(i < rle.length-1) i++;
+          n = rle[i] + 2;
+          if(i < rle.length-1) i++;
+        } else {
+          rb |= (d & 0xc0) >> rbc;
+          rbc += 2;
+          n = d & 0x3f;
+          if(rbc < 8){
+            d = rle[i] + 1;
+            if(i < rle.length-1) i++;
+          } else {
+            d = rb + 1;
+            rb = 0; rbc = 0;
+          }
+        }
+        for(;;){
+          if(j < size && j - d >= 0){ p[j] = p[j-d]; j++; }
+          else if(j < size){ j++; }
+          n--;
+          if(n < 0) break;
+        }
+      } else {
+        // paquet RLE : répète une couleur
+        if((d & 0xe0) === 0){
+          n = rle[i] + 8;
+          if(i < rle.length-1) i++;
+        } else {
+          n = d >> 5;
+          d &= 0x1f;
+        }
+        for(; n > 0; n--){ if(j < size) p[j++] = d; }
+      }
+      cts++;
+      if(cts >= 8){
+        ct = rle[i]; cts = 0;
+        if(i < rle.length-1) i++;
+      }
+    }
+    return p;
+  }
+
   async function parseSffV2(buf){
     const sprites = new Map();
     const sprOff = rd.u32(buf, 36), sprCount = rd.u32(buf, 40);
     const palOff = rd.u32(buf, 44), palCount = rd.u32(buf, 48);
     const ldataOff = rd.u32(buf, 52);
-    // palettes
+
+    // Palettes : 4 octets par couleur (RGBA) dans le bloc de données.
     const palettes = [];
     for(let i = 0; i < palCount; i++){
       const o = palOff + i * 16;
@@ -230,32 +334,55 @@
       }
       palettes.push(rgb);
     }
+
     const jobs = [];
+    const metas = [];
     for(let i = 0; i < sprCount; i++){
       const o = sprOff + i * 28;
-      const group = rd.u16(buf, o), image = rd.u16(buf, o + 2);
-      const w = rd.u16(buf, o + 4), h = rd.u16(buf, o + 6);
-      const x = (rd.u16(buf, o + 8) << 16) >> 16, y = (rd.u16(buf, o + 10) << 16) >> 16;
-      const palIdx = rd.u16(buf, o + 14);
-      const dataOff = rd.u32(buf, o + 16), dataLen = rd.u32(buf, o + 20);
-      const fmt = buf[o + 27];
-      if(!dataLen || !w || !h) continue;
-      const data = buf.subarray(ldataOff + dataOff, ldataOff + dataOff + dataLen);
-      if(fmt === 0){                                   // RAW indexé
-        const pal = palettes[palIdx] || palettes[0];
-        if(pal && data.length >= w*h){
-          try{ sprites.set(`${group},${image}`, { canvas:indexedToCanvas(data.subarray(0,w*h), w, h, pal), x, y }); }catch{}
-        }
-      } else if(fmt >= 10){                            // PNG (10/11/12)
+      metas.push({
+        group: rd.u16(buf, o), image: rd.u16(buf, o + 2),
+        w: rd.u16(buf, o + 4), h: rd.u16(buf, o + 6),
+        x: (rd.u16(buf, o + 8) << 16) >> 16, y: (rd.u16(buf, o + 10) << 16) >> 16,
+        linked: rd.u16(buf, o + 12),
+        fmt: buf[o + 14], depth: buf[o + 15],
+        dataOff: rd.u32(buf, o + 16), dataLen: rd.u32(buf, o + 20),
+        pal: rd.u16(buf, o + 24)
+      });
+    }
+
+    for(const m of metas){
+      if(!m.w || !m.h) continue;
+      // Sprite lié : réutilise les données de la source (copie).
+      const src = m.dataLen === 0 && metas[m.linked] ? metas[m.linked] : m;
+      if(!src.dataLen) continue;
+      const start = ldataOff + src.dataOff;
+      const pal = palettes[m.pal] || palettes[0];
+
+      if(src.fmt === 0){                                  // RAW indexé
+        const data = buf.subarray(start, start + src.dataLen);
+        if(pal && data.length >= m.w*m.h)
+          try{ sprites.set(`${m.group},${m.image}`, { canvas:indexedToCanvas(data.subarray(0, m.w*m.h), m.w, m.h, pal), x:m.x, y:m.y }); }catch{}
+      } else if(src.fmt >= 2 && src.fmt <= 4){            // RLE8 / RLE5 / LZ5
+        // Les formats compressés sont précédés de 4 octets (taille décompressée).
+        const comp = buf.subarray(start + 4, start + Math.max(4, src.dataLen));
+        const size = m.w * m.h;
+        let px = null;
+        try{
+          px = src.fmt === 2 ? rle8Decode(comp, size)
+             : src.fmt === 3 ? rle5Decode(comp, size)
+             : lz5Decode(comp, size);
+        }catch{ px = null; }
+        if(px && pal)
+          try{ sprites.set(`${m.group},${m.image}`, { canvas:indexedToCanvas(px, m.w, m.h, pal), x:m.x, y:m.y }); }catch{}
+      } else if(src.fmt >= 10){                           // PNG (10/11/12)
+        const data = buf.subarray(start + 4, start + src.dataLen);
         jobs.push((async () => {
           try{
-            const blob = new Blob([data.slice(4)], { type:'image/png' });
-            const bmp = await createImageBitmap(blob);
-            sprites.set(`${group},${image}`, { canvas:bmp, x, y });
+            const bmp = await createImageBitmap(new Blob([data], { type:'image/png' }));
+            sprites.set(`${m.group},${m.image}`, { canvas:bmp, x:m.x, y:m.y });
           }catch{ /* PNG illisible → ignoré */ }
         })());
       }
-      // fmt 2/3/4 (RLE8/RLE5/LZ5) non décodés → sprite sauté
     }
     await Promise.all(jobs);
     return sprites;
