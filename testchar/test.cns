@@ -1,0 +1,7 @@
+[Data]
+life = 1000
+attack = 100
+defence = 100
+
+[Velocity]
+walk.fwd = 2.4

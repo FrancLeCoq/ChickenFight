@@ -41,11 +41,24 @@
              hit:{x:30,y:-92,w:56,h:52}, kb:7,   hitstun:18, blockstun:11, push:7, launch:false },
     kick:  { name:'kick',  startup:6,  active:4,  recovery:14, dmg:9,  meter:7,
              hit:{x:36,y:-34,w:48,h:26}, kb:6,   hitstun:16, blockstun:10, push:6, low:true },
-    egg:   { name:'egg',   startup:10, active:2,  recovery:24, dmg:0,  meter:0, projectile:true }
+    egg:   { name:'egg',   startup:10, active:2,  recovery:24, dmg:0,  meter:0, projectile:true },
+    // ── Coups spéciaux (commandes directionnelles, façon Ikemen GO) ──
+    // COQ ASCENDANT : anti-air, invincible au démarrage, envoie en l'air.
+    dp:    { name:'dp',    startup:3,  active:8,  recovery:26, dmg:16, meter:12, special:true,
+             hit:{x:16,y:-140,w:56,h:110}, kb:5, hitstun:26, blockstun:14, push:6,
+             launch:true, invuln:8, juggle:3, cost:0, label:'COQ ASCENDANT !' },
+    // RETOURNÉ TOURNOYANT : coup tournant qui traverse, bon en pression.
+    qcb:   { name:'qcb',   startup:9,  active:6,  recovery:20, dmg:13, meter:11, special:true,
+             hit:{x:24,y:-96,w:66,h:70}, kb:8, hitstun:20, blockstun:12, push:9,
+             juggle:2, cost:0, label:'RETOURNÉ !' },
+    // SUPER — COCORICO FATAL : multi-hit dévastateur, coûte 100 de jauge.
+    super: { name:'super', startup:8,  active:16, recovery:34, dmg:9,  meter:0, special:true, super:true,
+             hit:{x:20,y:-150,w:96,h:150}, kb:3, hitstun:12, blockstun:10, push:3,
+             hits:5, invuln:14, juggle:9, cost:100, freeze:38, label:'COCORICO FATAL !' }
   };
 
   // ── État module ──
-  let cv, ctx, raf = null, acc = 0, last = 0;
+  let cv, ctx, raf = null, acc = 0, last = 0, freezeT = 0;
   let fighters = [], projectiles = [], fx = [];
   let input = blankInput(), keyState = {};
   let round = { n:1, wins:[0,0], timer:99*FPS, state:'intro', stateT:0, best:2 };
@@ -77,7 +90,14 @@
       onGround:true, blockHold:false,
       buffer:[], aiT:0, aiPlan:null,
       w: 46, // demi-largeur pushbox approx
-      flash:0
+      flash:0,
+      // ── systèmes Ikemen GO ──
+      cmd: window.ChickenCommand ? new window.ChickenCommand.CommandBuffer(window.ChickenCommand.roosterCommands()) : null,
+      combo:0, comboT:0,      // compteur de combo + fenêtre
+      juggle:0,               // points de juggle restants (limite les combos aériens)
+      invuln:0,               // frames d'invincibilité
+      hitCount:0,             // coups déjà portés par l'attaque multi-hit en cours
+      lastHitT:-99
     };
   }
 
@@ -131,6 +151,8 @@
 
   // ══════════════ UPDATE ══════════════
   function step(){
+    // hitstop / gel cinématique du super : la scène se fige, les FX continuent
+    if(freezeT>0){ freezeT--; updateFx(); return; }
     round.stateT++;
     if(round.state==='intro'){ if(round.stateT>70){ round.state='fight'; round.stateT=0; banner('COMBAT !','fight'); } return; }
     if(round.state==='ko' || round.state==='win'){ if(round.stateT>150) nextRound(); return; }
@@ -157,10 +179,15 @@
   function updateFighter(f, inp, opp){
     f.st++;
     if(f.flash>0) f.flash--;
+    if(f.invuln>0) f.invuln--;
+    // fenêtre de combo : au-delà, le compteur retombe
+    if(f.comboT>0){ f.comboT--; if(f.comboT===0){ f.combo=0; } }
+    if(f.onGround && f.state!=='hitstun') f.juggle = 0;
     f.facing = (opp.x >= f.x) ? 1 : -1;   // fait toujours face à l'adversaire (au sol)
 
     const prevDir = f.buffer.length?f.buffer[f.buffer.length-1].d:5;
     pushBuffer(f, inp, prevDir);
+    if(f.cmd) f.cmd.update(inp, f.facing);
 
     // états qui verrouillent le contrôle
     if(f.state==='ko'){ physics(f); return; }
@@ -173,9 +200,18 @@
     const back = f.facing>0?inp.left:inp.right;
 
     if(f.onGround){
-      // attaques (priorité)
-      if(inp.special && f.meter>=100){ startAttack(f,'egg'); f.meter=0; return; }
-      if(inp.special && hasQCF(f) && f.meter>=30){ startAttack(f,'egg'); f.meter-=30; return; }
+      // ── 1) commandes spéciales (prioritaires sur les boutons simples) ──
+      const detected = f.cmd ? f.cmd.detect() : null;
+      if(detected){
+        if(detected==='super' && f.meter>=MOVES.super.cost){ f.meter-=MOVES.super.cost; startAttack(f,'super'); return; }
+        if(detected==='dp'){ startAttack(f,'dp'); return; }
+        if(detected==='qcb'){ startAttack(f,'qcb'); return; }
+        if(detected==='qcf'){ startAttack(f,'egg'); return; }
+        if(detected==='charge'){ startAttack(f,'wing'); return; }
+      }
+      // ── 2) boutons simples ──
+      if(inp.special && f.meter>=100){ startAttack(f,'super'); f.meter-=100; return; }
+      if(inp.special){ startAttack(f,'egg'); return; }
       if(inp.heavy){ startAttack(f, 'wing'); return; }
       if(inp.kick){ startAttack(f, 'kick'); return; }
       if(inp.light){ startAttack(f, 'peck'); return; }
@@ -197,8 +233,12 @@
   }
 
   function startAttack(f, moveName){
-    f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false;
+    f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false; f.hitCount=0;
     if(f.move.projectile){ f.spawned=false; }
+    if(f.move.invuln) f.invuln = f.move.invuln;
+    if(f.move.label) banner(f.move.label, f.move.super?'super':'move');
+    if(f.move.super){ freeze(f.move.freeze||30); playBeep('super'); }
+    else if(f.move.special) playBeep('special');
   }
   function runAttack(f, opp){
     const m = f.move;
@@ -206,32 +246,55 @@
       if(f.st===m.startup && !f.spawned){ spawnEgg(f); f.spawned=true; }
     } else {
       const activeStart = m.startup, activeEnd = m.startup+m.active;
-      if(f.st>=activeStart && f.st<activeEnd && !f.hitDone){
-        const hb = hitboxWorld(f, m.hit);
-        if(overlap(hb, hurtbox(opp))){ applyHit(f, opp, m); f.hitDone=true; }
+      const maxHits = m.hits || 1;
+      if(f.st>=activeStart && f.st<activeEnd && f.hitCount<maxHits){
+        // multi-hit : une touche autorisée tous les 3 frames actifs
+        const canHit = maxHits===1 ? !f.hitDone : (f.st - f.lastHitT) >= 3;
+        if(canHit){
+          const hb = hitboxWorld(f, m.hit);
+          if(overlap(hb, hurtbox(opp))){
+            applyHit(f, opp, m, f.hitCount===maxHits-1);
+            f.hitDone=true; f.hitCount++; f.lastHitT=f.st;
+          }
+        }
       }
     }
     if(f.st >= m.startup + (m.active||0) + m.recovery){ setState(f,'idle'); f.move=null; }
     f.vx *= 0.8;
   }
 
-  function applyHit(att, def, m){
+  function applyHit(att, def, m, isFinal=true){
+    // invincibilité (démarrage de DP / super) : le coup passe à travers
+    if(def.invuln>0){ spawnSpark(def.x, GROUND-90, 'block'); return; }
     // garde : le défenseur recule et n'attaque pas → chip minimal
     const blocking = def.state==='block' || def.blockHold;
     spawnSpark((def.x + att.x)/2, GROUND - 70, blocking?'block':'hit');
     if(blocking){
       def.vx = 0.6*m.push*(-def.facing); def.stun = m.blockstun; setState(def,'hitstun');
       def.hp -= Math.max(0, Math.round(m.dmg*0.12*(1/def.defense)));
-      shake(4); return;
+      att.combo = 0; shake(4); return;
     }
-    const dmg = Math.max(1, Math.round(m.dmg * att.power / def.defense));
+    // juggle : au-delà du quota, l'adversaire au sol ne peut plus être relancé
+    if(!def.onGround && def.juggle <= 0){ return; }
+    if(!def.onGround) def.juggle -= 1;
+    else def.juggle = m.juggle || 2;
+
+    // combo + dégressivité des dégâts (damage scaling façon Ikemen GO)
+    att.combo = (att.comboT>0 ? att.combo : 0) + 1;
+    att.comboT = 60;
+    const scale = att.combo<=1 ? 1 : Math.max(0.30, 1 - (att.combo-1)*0.11);
+    const dmg = Math.max(1, Math.round(m.dmg * att.power / def.defense * scale));
+
     def.hp -= dmg; def.flash = 6;
-    def.vx = m.kb*(-def.facing); def.vy = m.launch?-8:0; if(m.launch) def.onGround=false;
-    def.stun = m.hitstun; setState(def,'hitstun'); def.buffer=[];
+    def.vx = m.kb*(-def.facing);
+    if(m.launch){ def.vy = -9; def.onGround=false; }
+    def.stun = m.hitstun; setState(def,'hitstun'); def.buffer=[]; def.cmd?.reset();
+    def.combo = 0; def.comboT = 0;
     att.meter = Math.min(100, att.meter + m.meter);
     def.meter = Math.min(100, def.meter + Math.round(m.meter*0.4));
-    shake(m.dmg>=10?9:5);
+    shake(m.super?12:(m.dmg>=13?9:5));
     popDamage(def.x, GROUND-120, dmg);
+    if(isFinal && att.combo>=2) popCombo(att);
   }
 
   function setState(f, s){ if(f.state!==s){ f.state=s; f.st=0; } }
@@ -327,7 +390,10 @@
   }
 
   // ══════════════ FX ══════════════
-  function banner(text,tone){ fx.push({kind:'banner',text,tone,t:0,life:70}); }
+  function banner(text,tone){ fx.push({kind:'banner',text,tone,t:0,life:tone==='move'?40:70}); }
+  function popCombo(f){ fx.push({kind:'combo',side:f.side,n:f.combo,t:0,life:50}); }
+  // Gel cinématique au déclenchement d'un super (hitstop global).
+  function freeze(frames){ freezeT = Math.max(freezeT, frames); }
   function spawnSpark(x,y,type){ fx.push({kind:'spark',x,y,type,t:0,life:14}); if(type==='hit')playBeep('hit'); }
   function eggBoom(x,y){ fx.push({kind:'boom',x,y,t:0,life:26}); playBeep('boom'); }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
@@ -408,7 +474,23 @@
       if(o.kind==='spark'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.fillStyle=o.type==='block'?'#8ad':'#ffd54a'; ctx.beginPath(); ctx.arc(o.x,o.y,6+k*22,0,7); ctx.fill(); ctx.restore(); }
       if(o.kind==='boom'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.font=(30+k*36)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('💥',o.x,o.y); ctx.restore(); }
       if(o.kind==='dmg'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.fillStyle='#fff'; ctx.font='bold 20px Fredoka,sans-serif'; ctx.textAlign='center'; ctx.fillText('-'+o.d, o.x, o.y - k*30); ctx.restore(); }
-      if(o.kind==='banner'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=k<0.15?k/0.15:(k>0.8?(1-k)/0.2:1); ctx.fillStyle=o.tone==='ko'?'#ff5252':'#ffd54a'; ctx.font='bold 46px Bangers,Fredoka,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.strokeText(o.text,VW/2,VH*0.42); ctx.fillText(o.text,VW/2,VH*0.42); ctx.restore(); }
+      if(o.kind==='banner'){
+        const k=o.t/o.life; ctx.save(); ctx.globalAlpha=k<0.15?k/0.15:(k>0.8?(1-k)/0.2:1);
+        const small = o.tone==='move', sup = o.tone==='super';
+        ctx.fillStyle = o.tone==='ko'?'#ff5252': sup?'#ff3d7f': '#ffd54a';
+        ctx.font = 'bold '+(small?26:sup?52:46)+'px Bangers,Fredoka,sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,.65)';
+        const y = small?VH*0.22:VH*0.42;
+        ctx.strokeText(o.text,VW/2,y); ctx.fillText(o.text,VW/2,y); ctx.restore();
+      }
+      if(o.kind==='combo'){
+        const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k*k;
+        const x = o.side===0? 60 : VW-60;
+        ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.lineWidth=4;
+        ctx.font='bold 30px Bangers,Fredoka,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        const y = VH*0.30 - k*14;
+        ctx.strokeText(o.n+' COMBO',x,y); ctx.fillStyle='#ffd54a'; ctx.fillText(o.n+' COMBO',x,y); ctx.restore();
+      }
     }
   }
 
@@ -452,7 +534,7 @@
     try{ actx ||= new (window.AudioContext||window.webkitAudioContext)(); }catch{ return; }
     if(ChickenArena.muted) return;
     const o=actx.createOscillator(), g=actx.createGain(), n=actx.currentTime;
-    const f = {hit:120,egg:300,boom:80,ko:70,block:200}[type]||160;
+    const f = {hit:120,egg:300,boom:80,ko:70,block:200,special:420,super:660}[type]||160;
     o.type = type==='boom'||type==='hit'?'sawtooth':'triangle'; o.frequency.value=f;
     g.gain.setValueAtTime(0.0001,n); g.gain.exponentialRampToValueAtTime(0.14,n+0.01); g.gain.exponentialRampToValueAtTime(0.0001,n+0.18);
     o.connect(g).connect(actx.destination); o.start(n); o.stop(n+0.2);

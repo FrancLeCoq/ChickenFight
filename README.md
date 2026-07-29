@@ -77,6 +77,39 @@ En plus du combat tactique au tour par tour, le jeu embarque un **moteur de bast
 
 Accessible depuis le menu (**Arène temps réel**). **Échelle d'évolution** : le coq absorbe l'adversaire vaincu et évolue **Valet ▸ Reine ▸ Roi** face à des IA de plus en plus fortes. Contrôles : manette tactile à l'écran + clavier (◀▶ déplacer, ▲ saut, ▼ garde/bas, J bec, L patte, K aile, Espace œuf).
 
+### Mécaniques absorbées d'Ikemen GO
+
+Ikemen GO (licence MIT) est un moteur **natif Go (CGO + SDL2 + OpenGL)** : il ne peut pas être exécuté dans un navigateur, donc dans une mini-app Telegram. Son **architecture** est en revanche reproduite ici en JavaScript.
+
+**Système de commandes** (`js/command-system.js`) — reproduit la logique des fichiers `.CMD` :
+
+| Commande | Saisie | Coup |
+|---|---|---|
+| QCF | ↓ ↘ → + coup | **Œuf explosif** (projectile) |
+| DP | → ↓ ↘ + coup | **Coq ascendant** (anti-air, invincible au départ) |
+| QCB | ↓ ↙ ← + patte | **Retourné tournoyant** |
+| Charge | ← puis → + aile | **Charge d'aile** |
+| SUPER | ↓↘→ ↓↘→ + coup | **COCORICO FATAL** (5 hits, jauge à 100) |
+
+Notation numpad relative au sens du personnage, fenêtres de saisie, priorité des commandes complexes sur les boutons simples.
+
+**Systèmes de combat** : compteur de **combos** avec **dégressivité des dégâts**, **juggle** (limite les combos aériens), **frames d'invincibilité**, **gel cinématique** au déclenchement du super, attaques **multi-hit**, garde avec chip damage.
+
+**Chargeur de personnages** (`js/mugen-loader.js`) — lit les vrais formats Ikemen GO / MUGEN pour faire combattre de vrais personnages :
+
+- `.DEF` (fiche INI), `.AIR` (animations), `.CMD` (commandes), `.CNS` (constantes) ;
+- `.SFF` v1 (palette + PCX RLE) et v2 (sous-formats RAW et PNG). Les sprites SFF v2 compressés en RLE8/RLE5/LZ5 ne sont pas encore décodés et sont ignorés sans bloquer le chargement.
+
+```js
+const perso = await ChickenMugen.loadCharacter('chars/kfm/kfm.def');
+perso.anims[200];      // animation de marche
+perso.sprite(0, 0);    // sprite (groupe, image)
+```
+
+Un jeu de fixtures au format réel se trouve dans `testchar/` pour valider les parseurs.
+
+> **Licences** : le moteur Ikemen GO est MIT, mais **chaque personnage a son propre auteur et ses propres conditions**. Vérifier les autorisations avant d'embarquer un personnage tiers.
+
 ## Roadmap
 
 - **Duel en ligne temps réel** : squelette prêt dans `js/netcode.js` (`window.ChickenNet`). Plan : lobby via Supabase Realtime, P2P WebRTC pour la latence, netcode **rollback** (le moteur doit devenir déterministe — RNG à graine partagée). À finaliser.
