@@ -1,0 +1,11 @@
+; test animation
+[Begin Action 0]
+Clsn2Default: 1
+ Clsn2[0] = -10,0, 10,-60
+0,0, 0,0, 10
+0,0, 0,0, -1
+
+[Begin Action 200]
+0,0, 0,0, 3
+Loopstart
+0,0, 2,0, 4, H

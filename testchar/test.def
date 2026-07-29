@@ -1,0 +1,10 @@
+[Info]
+name = "TestChar"
+displayname = "Coq Test"
+author = "ChickenFight"
+
+[Files]
+sprite = test.sff
+anim = test.air
+cmd = test.cmd
+cns = test.cns
