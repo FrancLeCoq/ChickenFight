@@ -277,7 +277,15 @@
       this.stateNo = no;
       this.time = 0;
       this.changed = true;
-      if(!s) return;
+      if(!s){
+        // État commun (0 debout, 11 accroupi, 20 marche, 5000 touché…) :
+        // il vit dans le common1.cns du moteur, pas dans le fichier du
+        // personnage. On rend donc la main au moteur, sinon le combattant
+        // resterait bloqué dans son état d'attaque, sans contrôle.
+        this.host.setCtrl(true);
+        this.host.commonState?.(no);
+        return;
+      }
       const a = s.attrs;
       if(a.anim !== undefined) this.host.setAnim(parseInt(a.anim, 10));
       if(a.velset !== undefined){ const v = nums(a.velset); this.host.setVel(v[0], v[1]); }

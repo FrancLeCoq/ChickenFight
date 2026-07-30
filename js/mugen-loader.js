@@ -211,11 +211,11 @@
   }
 
   /** Lit une banque SFF (v1 ou v2) → Map "group,image" → {canvas,x,y}. */
-  async function parseSff(buf){
+  async function parseSff(buf, forcePal){
     const sig = String.fromCharCode(...buf.subarray(0, 11));
     if(sig !== 'ElecbyteSpr') throw new Error('SFF invalide');
     const verHi = buf[15];                     // 1 = SFF v1, 2 = SFF v2
-    return verHi >= 2 ? parseSffV2(buf) : parseSffV1(buf);
+    return verHi >= 2 ? parseSffV2(buf, forcePal) : parseSffV1(buf);
   }
 
   function parseSffV1(buf){
@@ -422,7 +422,7 @@
     return indexedToCanvas(idx, w, h, pal, trns);
   }
 
-  async function parseSffV2(buf){
+  async function parseSffV2(buf, forcePal){
     const sprites = new Map();
     const sprOff = rd.u32(buf, 36), sprCount = rd.u32(buf, 40);
     const palOff = rd.u32(buf, 44), palCount = rd.u32(buf, 48);
@@ -462,7 +462,8 @@
       const src = m.dataLen === 0 && metas[m.linked] ? metas[m.linked] : m;
       if(!src.dataLen) continue;
       const start = ldataOff + src.dataOff;
-      const pal = palettes[m.pal] || palettes[0];
+      // Palette forcée : même sprites, couleurs différentes.
+      const pal = (forcePal != null && palettes[forcePal]) || palettes[m.pal] || palettes[0];
 
       if(src.fmt === 0){                                  // RAW indexé
         const data = buf.subarray(start, start + src.dataLen);
@@ -500,7 +501,17 @@
   }
 
   // ─────────── Chargement complet d'un personnage ───────────
-  async function loadCharacter(defUrl){
+  /**
+   * Charge un personnage en forçant une palette donnée.
+   * C'est la méthode MUGEN classique pour obtenir des combattants
+   * visuellement distincts à partir des mêmes sprites.
+   */
+  async function loadCharacterPal(defUrl, palIndex){
+    const c = await loadCharacter(defUrl, palIndex);
+    return c;
+  }
+
+  async function loadCharacter(defUrl, forcePal){
     const base = dirOf(defUrl);
     const def = parseIni(await fetchText(defUrl));
     const files = def['files'] || {};
@@ -543,7 +554,7 @@
     }
     // SFF (sprites)
     if(files.sprite){
-      try{ out.sprites = await parseSff(await fetchBuffer(base + files.sprite)); }
+      try{ out.sprites = await parseSff(await fetchBuffer(base + files.sprite), forcePal); }
       catch(e){ console.warn('[ChickenMugen] SFF:', e.message); }
     }
     return out;
@@ -562,7 +573,7 @@
       if(this.no === no && !force) return;
       const a = this.char.anims[no];
       if(!a || !a.frames.length) return;          // animation absente → on garde l'actuelle
-      this.no = no; this.anim = a; this.i = 0; this.t = 0;
+      this.no = no; this.anim = a; this.i = 0; this.t = 0; this.done = false;
     }
 
     /** Avance d'une frame de jeu. Renvoie true si l'animation est terminée. */
@@ -570,13 +581,14 @@
       if(!this.anim) return true;
       const f = this.anim.frames[this.i];
       if(!f) return true;
-      if(f.dur < 0) return true;                  // frame finale : on reste dessus
+      if(f.dur < 0){ this.done = true; return true; }   // frame finale : on reste dessus
       this.t++;
       if(this.t >= f.dur){
         this.t = 0;
         this.i++;
         if(this.i >= this.anim.frames.length){
           this.i = this.anim.loopStart || 0;      // bouclage
+          this.done = true;                       // un cycle complet est passé
           return true;
         }
       }
@@ -613,7 +625,7 @@
   };
 
   window.ChickenMugen = {
-    loadCharacter, parseIni, parseAir, parseCmd, parseSff,
+    loadCharacter, loadCharacterPal, parseIni, parseAir, parseCmd, parseSff,
     parseCommandString, decodePcx, Animator, ANIM,
     rle8Decode, rle5Decode, lz5Decode
   };
