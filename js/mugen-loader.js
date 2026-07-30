@@ -211,11 +211,11 @@
   }
 
   /** Lit une banque SFF (v1 ou v2) → Map "group,image" → {canvas,x,y}. */
-  async function parseSff(buf, forcePal){
+  async function parseSff(buf, forcePal, skin){
     const sig = String.fromCharCode(...buf.subarray(0, 11));
     if(sig !== 'ElecbyteSpr') throw new Error('SFF invalide');
     const verHi = buf[15];                     // 1 = SFF v1, 2 = SFF v2
-    return verHi >= 2 ? parseSffV2(buf, forcePal) : parseSffV1(buf);
+    return verHi >= 2 ? parseSffV2(buf, forcePal, skin) : parseSffV1(buf);
   }
 
   function parseSffV1(buf){
@@ -422,7 +422,7 @@
     return indexedToCanvas(idx, w, h, pal, trns);
   }
 
-  async function parseSffV2(buf, forcePal){
+  async function parseSffV2(buf, forcePal, skin){
     const sprites = new Map();
     const sprOff = rd.u32(buf, 36), sprCount = rd.u32(buf, 40);
     const palOff = rd.u32(buf, 44), palCount = rd.u32(buf, 48);
@@ -437,6 +437,10 @@
       const rgb = new Uint8Array(768);
       for(let c = 0; c < 256 && c*4+2 < p.length; c++){
         rgb[c*3] = p[c*4]; rgb[c*3+1] = p[c*4+1]; rgb[c*3+2] = p[c*4+2];
+      }
+      // Teinte de peau : remplace les tons chair (index 26-29 chez KFM).
+      if(skin && SKINS[skin]){
+        SKINS[skin].forEach((c, k) => { const i = 26 + k; rgb[i*3]=c[0]; rgb[i*3+1]=c[1]; rgb[i*3+2]=c[2]; });
       }
       palettes.push(rgb);
     }
@@ -511,7 +515,14 @@
     return c;
   }
 
-  async function loadCharacter(defUrl, forcePal){
+  // Teintes de peau : on remplace les tons chair de la palette. Les index
+  // 26 à 29 de Kung Fu Man vont du plus clair au plus foncé.
+  const SKINS = {
+    black: [[92,58,38],[74,45,29],[56,33,21],[38,22,14]],
+    asian: [[247,214,160],[224,181,120],[186,140,86],[130,92,54]],
+    pale:  [[255,232,210],[240,205,178],[206,164,134],[150,110,84]]
+  };
+  async function loadCharacter(defUrl, forcePal, skin){
     const base = dirOf(defUrl);
     const def = parseIni(await fetchText(defUrl));
     const files = def['files'] || {};
@@ -554,7 +565,7 @@
     }
     // SFF (sprites)
     if(files.sprite){
-      try{ out.sprites = await parseSff(await fetchBuffer(base + files.sprite), forcePal); }
+      try{ out.sprites = await parseSff(await fetchBuffer(base + files.sprite), forcePal, skin); }
       catch(e){ console.warn('[ChickenMugen] SFF:', e.message); }
     }
     return out;
