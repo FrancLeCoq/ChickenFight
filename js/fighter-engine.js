@@ -79,7 +79,7 @@
   let round = { n:1, wins:[0,0], timer:99*FPS, state:'intro', stateT:0, best:2 };
   let opts = null, running = false, images = {};
 
-  function blankInput(){ return { left:false,right:false,up:false,down:false,light:false,heavy:false,kick:false,special:false }; }
+  function blankInput(){ return { left:false,right:false,up:false,down:false,light:false,heavy:false,kick:false,special:false,super:false }; }
 
   // ── Chargement des images (avec cache) ──
   function loadImage(src){
@@ -154,7 +154,8 @@
     const map = { ArrowLeft:'left',KeyA:'left', ArrowRight:'right',KeyD:'right',
       ArrowUp:'up',KeyW:'up', ArrowDown:'down',KeyS:'down',
       KeyJ:'light',KeyU:'light', KeyK:'heavy',KeyI:'heavy', KeyL:'kick',KeyO:'kick',
-      Space:'special',Enter:'special' };
+      KeyM:'special', KeyP:'special',          // œuf projectile
+      Space:'super', Enter:'super' };          // coup fatal (jauge pleine)
     const k = map[e.code];
     if(k){ e.preventDefault(); keyState[k] = down; }
   }
@@ -267,7 +268,9 @@
         if(detected==='charge'){ startAttack(f,'wing'); return; }
       }
       // ── 2) boutons simples ──
-      if(inp.special && f.meter>=100){ startAttack(f,'super'); f.meter-=100; return; }
+      // Coup fatal : touche dédiée, uniquement jauge pleine.
+      if(inp.super && f.meter >= 100){ f.meter -= 100; startAttack(f,'super'); return; }
+      // Œuf explosif : projectile, sur sa propre touche.
       if(inp.special){ startAttack(f,'egg'); return; }
       if(inp.heavy){ startAttack(f, 'wing'); return; }
       if(inp.kick){ startAttack(f, 'kick'); return; }
@@ -814,7 +817,9 @@
    */
   let lightning = 0;
   function drawWeather(D){
-    const w = D.weather;
+    if(D.city) drawCity();
+    // En intérieur, aucune météo : ni pluie, ni nuages, ni soleil.
+    const w = D.indoor ? null : D.weather;
     if(!w || w === 'clear') return;
 
     if(w === 'sun'){
@@ -860,6 +865,23 @@
         ctx.fillStyle = `rgba(235,240,255,${0.16 + (lightning/7)*0.34})`;
         ctx.fillRect(0,0,VW,VH);
       }
+    }
+  }
+
+  /** Silhouettes d'immeubles pour le décor urbain. */
+  function drawCity(){
+    ctx.fillStyle = 'rgba(12,18,34,.92)';
+    const heights = [70,110,52,132,88,118,64,100,76,124,58];
+    let x = -10;
+    for(let i=0;i<heights.length;i++){
+      const w = 46 + (i%3)*18, h = heights[i];
+      ctx.fillRect(x, GROUND-h, w, h);
+      ctx.fillStyle = 'rgba(255,214,120,.5)';
+      for(let wy = GROUND-h+10; wy < GROUND-14; wy += 16)
+        for(let wx = x+7; wx < x+w-8; wx += 14)
+          if(((wx*7+wy*3+i) % 5) < 2) ctx.fillRect(wx, wy, 5, 7);
+      ctx.fillStyle = 'rgba(12,18,34,.92)';
+      x += w + 8;
     }
   }
 
@@ -925,15 +947,36 @@
     //  scène déjà dessinée — d'où les gros rectangles rouges.)
     ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
     if(f.flash > 0){
-      ctx.save();
-      ctx.globalAlpha = Math.min(0.55, f.flash / 14);
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.filter = 'brightness(0) saturate(100%) invert(28%) sepia(90%) saturate(3000%) hue-rotate(350deg)';
-      ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
-      ctx.filter = 'none';
-      ctx.restore();
+      // La teinte est composée dans un canvas hors écran : appliquée
+      // directement sur la scène, 'source-atop' peindrait un rectangle sur
+      // tout le décor déjà dessiné, et ctx.filter efface le sprite.
+      const tint = tintSprite(img, '#e01020');
+      if(tint){
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.5, f.flash / 14);
+        ctx.drawImage(tint, -s.x + frame.x, -s.y + frame.y);
+        ctx.restore();
+      }
     }
     ctx.restore();
+  }
+
+  // Cache des sprites teintés : un canvas hors écran par image, réutilisé.
+  const tintCache = new WeakMap();
+  function tintSprite(img, color){
+    let c = tintCache.get(img);
+    if(c) return c;
+    const w = img.width, h = img.height;
+    if(!w || !h) return null;
+    c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';   // isolé : ne touche que ce canvas
+    g.fillStyle = color;
+    g.fillRect(0, 0, w, h);
+    tintCache.set(img, c);
+    return c;
   }
 
   function drawEgg(pr){ ctx.save(); ctx.translate(pr.x,pr.y); ctx.rotate(pr.rot); ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🥚',0,0); ctx.restore(); }
@@ -1076,9 +1119,17 @@
   // ══════════════ BOUCLE ══════════════
   function frame(ts){
     if(!running) return;
-    if(!last) last=ts; acc += ts-last; last=ts;
-    let guard=0;
-    while(acc>=DT && guard<5){ step(); acc-=DT; guard++; }
+    if(!last) last = ts;
+    let delta = ts - last;
+    last = ts;
+    // Mise en arrière-plan : requestAnimationFrame s'arrête mais le temps
+    // continue. Sans plafond, tout le retard serait rejoué d'un bloc au
+    // retour — d'où la salve de coups ingérable. On ignore les écarts
+    // anormaux et on borne l'accumulateur.
+    if(delta > 250){ delta = DT; acc = 0; ChickenArena.resetTouch(); keyState = {}; }
+    acc = Math.min(acc + delta, DT * 5);
+    let guard = 0;
+    while(acc >= DT && guard < 5){ step(); acc -= DT; guard++; }
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -1100,9 +1151,20 @@
       running=true; last=0; acc=0;
       this._kd = e=>onKey(e,true); this._ku = e=>onKey(e,false);
       window.addEventListener('keydown',this._kd); window.addEventListener('keyup',this._ku);
+      // Retour au premier plan : on repart d'une horloge propre et sans
+      // aucune touche restée enfoncée pendant l'absence.
+      this._vis = () => {
+        if(document.hidden) return;
+        last = 0; acc = 0; keyState = {}; this.resetTouch();
+        fighters.forEach(f => { f.buffer = []; f.cmd?.reset(); });
+      };
+      document.addEventListener('visibilitychange', this._vis);
+      window.addEventListener('blur', () => { keyState = {}; this.resetTouch(); });
       raf=requestAnimationFrame(frame);
     },
     setTouch(k,v){ this._touch[k]=v; },
+    /** Jauge de super du joueur (0-100), pour l'état du bouton ŒUF. */
+    playerMeter(){ return fighters[0] ? fighters[0].meter : 0; },
     /** Crochets de test : fige l'IA, place les combattants, force un coup. */
     _test: {
       freezeAi(v){ fighters.forEach(f => f.aiFrozen = !!v); },
@@ -1119,7 +1181,10 @@
       }));
     },
     resetTouch(){ this._touch=blankInput(); },
-    stop(){ running=false; if(raf)cancelAnimationFrame(raf); raf=null; window.removeEventListener('keydown',this._kd); window.removeEventListener('keyup',this._ku); }
+    stop(){ running=false; if(raf)cancelAnimationFrame(raf); raf=null;
+      window.removeEventListener('keydown',this._kd); window.removeEventListener('keyup',this._ku);
+      if(this._vis) document.removeEventListener('visibilitychange', this._vis);
+      keyState = {}; this.resetTouch(); }
   };
   window.ChickenArena = ChickenArena;
 })();

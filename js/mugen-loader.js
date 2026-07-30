@@ -438,6 +438,13 @@
       for(let c = 0; c < 256 && c*4+2 < p.length; c++){
         rgb[c*3] = p[c*4]; rgb[c*3+1] = p[c*4+1]; rgb[c*3+2] = p[c*4+2];
       }
+      // Tenue ninja : le kimono blanc et les bleus (bandeau, chaussures)
+      // passent au noir. Sans cela, le personnage resterait en blanc.
+      if(skin === 'ninja'){
+        const dark = [[38,38,44],[28,28,34],[20,20,25],[14,14,18]];
+        [16,17,18,19,20,21].forEach((i,k)=>{ const c=dark[Math.min(k,3)]; rgb[i*3]=c[0]; rgb[i*3+1]=c[1]; rgb[i*3+2]=c[2]; });
+        [22,23,24,25].forEach((i,k)=>{ const c=dark[Math.min(k,3)]; rgb[i*3]=c[0]; rgb[i*3+1]=c[1]; rgb[i*3+2]=c[2]; });
+      }
       // Teinte de peau : remplace les tons chair (index 26-29 chez KFM).
       if(skin && SKINS[skin]){
         SKINS[skin].forEach((c, k) => { const i = 26 + k; rgb[i*3]=c[0]; rgb[i*3+1]=c[1]; rgb[i*3+2]=c[2]; });
@@ -519,6 +526,8 @@
   // 26 à 29 de Kung Fu Man vont du plus clair au plus foncé.
   const SKINS = {
     black: [[92,58,38],[74,45,29],[56,33,21],[38,22,14]],
+    // Ninja : peau très sombre (les vêtements sont traités à part).
+    ninja: [[62,44,38],[48,33,28],[34,22,19],[22,14,12]],
     asian: [[247,214,160],[224,181,120],[186,140,86],[130,92,54]],
     pale:  [[255,232,210],[240,205,178],[206,164,134],[150,110,84]]
   };

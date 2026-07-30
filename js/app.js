@@ -1021,17 +1021,19 @@
 
   // Décors : ambiances de scène passées au moteur.
   const DECORS = {
-    dojo:    { sky:'#3a2568', sky2:'#4a2f7a', ground:'#7a4a22', ground2:'#3d2712', weather:'clear' },
+    // 'indoor' : aucune météo (dojo, salle du trône, arène couverte).
+    dojo:    { sky:'#3a2568', sky2:'#4a2f7a', ground:'#7a4a22', ground2:'#3d2712', weather:'clear', indoor:true },
     sunset:  { sky:'#7c2d12', sky2:'#b45309', ground:'#78350f', ground2:'#431407', weather:'sun' },
     ice:     { sky:'#0c4a6e', sky2:'#0369a1', ground:'#94a3b8', ground2:'#334155', weather:'cloudy' },
     forest:  { sky:'#14532d', sky2:'#166534', ground:'#4d7c0f', ground2:'#1a2e05', weather:'rain' },
-    throne:  { sky:'#4c1d95', sky2:'#7c3aed', ground:'#78350f', ground2:'#3b0764', weather:'clear' },
-    arena:   { sky:'#1e1b4b', sky2:'#312e81', ground:'#92400e', ground2:'#451a03', weather:'sun' },
+    throne:  { sky:'#4c1d95', sky2:'#7c3aed', ground:'#78350f', ground2:'#3b0764', weather:'clear', indoor:true },
+    arena:   { sky:'#1e1b4b', sky2:'#312e81', ground:'#92400e', ground2:'#451a03', weather:'clear', indoor:true },
     storm:   { sky:'#0f172a', sky2:'#1e293b', ground:'#3f3f46', ground2:'#18181b', weather:'storm' },
     desert:  { sky:'#b45309', sky2:'#fbbf24', ground:'#d97706', ground2:'#78350f', weather:'sun' },
     night:   { sky:'#020617', sky2:'#1e1b4b', ground:'#312e81', ground2:'#0f172a', weather:'cloudy' },
     volcano: { sky:'#450a0a', sky2:'#b91c1c', ground:'#7f1d1d', ground2:'#1c0505', weather:'storm' },
-    swamp:   { sky:'#1a2e05', sky2:'#3f6212', ground:'#365314', ground2:'#0f1a02', weather:'rain' }
+    swamp:   { sky:'#1a2e05', sky2:'#3f6212', ground:'#365314', ground2:'#0f1a02', weather:'rain' },
+    city:    { sky:'#0b1120', sky2:'#1e293b', ground:'#334155', ground2:'#0f172a', weather:'rain', city:true }
   };
 
   // Roster du mode Combat : palettes différentes du même personnage.
@@ -1045,6 +1047,7 @@
     { id:'kfm',  pal:7,  name:'Le Nomade',     desc:'Endurance du désert',     decor:'desert',  hp:245, pow:1.22, xp:3400, holder:true },
     { id:'kfm',  pal:10, name:'L’Orageux',     desc:'Frappe comme la foudre',  decor:'storm',   hp:260, pow:1.30, xp:4200, holder:true },
     { id:'kfm',  pal:13, name:'Le Sylvain',    desc:'Souple et insaisissable', decor:'forest',  hp:250, pow:1.26, xp:5000, holder:true },
+    { id:'kfm',  pal:2,  name:'Le Ninja',      desc:'Ombre des toits',         decor:'city',    hp:240, pow:1.28, xp:4600, holder:true, skin:'ninja' },
     { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',       decor:'throne',  hp:290, pow:1.38, xp:6000, holder:true }
   ];
 
@@ -1300,6 +1303,14 @@
       btn.addEventListener('pointerup',up); btn.addEventListener('pointerleave',up); btn.addEventListener('pointercancel',up);
     });
     $('#rtBackBtn').addEventListener('click', rtBack);
+    // Le bouton ŒUF suit la jauge de super : grisé, puis clignotant à 100 %.
+    setInterval(() => {
+      const btn = $('#eggBtn');
+      if(!btn || !rtActive || !window.ChickenArena?.playerMeter) return;
+      const ready = window.ChickenArena.playerMeter() >= 100;
+      btn.disabled = !ready;
+      btn.classList.toggle('ready', ready);
+    }, 200);
     $$('#diffRow .diff-btn').forEach(b => b.addEventListener('click', () => {
       rtDiff = b.dataset.diff; renderDiff();
     }));

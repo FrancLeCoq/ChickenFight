@@ -25,7 +25,9 @@ from PIL import Image, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC  = os.path.join(ROOT, 'chars', 'kfm')
 OUT  = os.path.join(ROOT, 'chars', 'coqfu')
-HEAD_IMG = os.path.join(ROOT, 'assets', 'francis-head.webp')
+# Tête dessinée nativement en pixel art (voir tools/draw-rooster-head.py) :
+# alpha strictement 0 ou 255, donc aucun liseré une fois indexée.
+HEAD_IMG = os.path.join(ROOT, 'assets', 'rooster-head-pixel.png')
 
 # Attention : l'index 31 (49,49,49) est la couleur de CONTOUR de tout le
 # personnage, pas seulement des cheveux — il ne peut donc pas servir de
@@ -97,7 +99,7 @@ def main():
     a = a.filter(ImageFilter.MinFilter(3))
     head.putalpha(a)
     head = head.crop(head.getbbox())
-    NCOL = 24
+    NCOL = 16
     rgbq = head.convert('RGB').quantize(colors=NCOL, method=Image.MEDIANCUT)
     qpal = rgbq.getpalette()[:NCOL*3]
     head_colors = [tuple(qpal[i*3:i*3+3]) for i in range(NCOL)]

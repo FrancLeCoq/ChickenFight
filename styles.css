@@ -362,6 +362,15 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 .rt-kick{background:radial-gradient(circle at 38% 32%,#fb7185,#9f1239)}
 .rt-wing{background:radial-gradient(circle at 38% 32%,#38bdf8,#0369a1)}
 .rt-egg{background:radial-gradient(circle at 38% 32%,#f59e0b,#b45309)}
+/* Coup fatal : grisé tant que la jauge de super n'est pas pleine,
+   clignotant dès qu'il devient disponible. */
+.rt-atk:disabled{background:radial-gradient(circle at 38% 32%,#57534e,#292524);
+  filter:grayscale(1) brightness(.75);opacity:.6;cursor:not-allowed}
+.rt-egg.ready{animation:eggReady .7s ease-in-out infinite}
+@keyframes eggReady{
+  0%,100%{box-shadow:0 4px 0 rgba(0,0,0,.4),inset 0 2px 3px rgba(255,255,255,.25),0 0 0 rgba(255,213,74,0)}
+  50%{box-shadow:0 4px 0 rgba(0,0,0,.4),inset 0 2px 3px rgba(255,255,255,.25),0 0 26px 6px rgba(255,213,74,.9);transform:scale(1.06)}
+}
 .rt-hint{font-size:8.5px;color:var(--muted);text-align:center;margin:8px 2px 0;line-height:1.4}
 @media(min-width:560px){.rt-hint{font-size:10px}}
 /* Bouton retour, bien visible et opaque */
