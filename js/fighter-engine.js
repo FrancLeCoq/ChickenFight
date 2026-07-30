@@ -234,7 +234,13 @@
 
     // états qui verrouillent le contrôle
     if(f.state==='ko'){ physics(f); return; }
-    if(f.state==='hitstun'){ if(f.st>=f.stun){ setState(f,'idle'); } physics(f); return; }
+    // Filet de sécurité : une durée absente ou aberrante bloquerait le
+    // combattant en hitstun pour toujours.
+    if(f.state==='hitstun'){
+      const stun = (typeof f.stun === 'number' && f.stun > 0) ? Math.min(f.stun, 60) : 14;
+      if(f.st >= stun){ setState(f,'idle'); f.stun = 0; }
+      physics(f); return;
+    }
     if(f.state==='attack'){ runAttack(f, opp); physics(f); return; }
 
     // au sol : garde / accroupi / marche / saut / attaques
@@ -441,6 +447,20 @@
       setJuggle(v){ f.cnsJuggle = v; },
       setAttackDist(){},
       turn(){ f.facing *= -1; },
+      /** Le .cns renvoie vers un état commun : le moteur reprend la main. */
+      commonState(no){
+        f.hitDef = null; f.hitDefUsed = false;
+        f.cnsMoveType = 'I';
+        // Sans durée explicite, le hitstun ne se termine jamais : on garde
+        // celle du coup encaissé, sinon une valeur de repli.
+        if(no >= 5000 && no < 5900){ f.stun = f.stun || 14; setState(f, 'hitstun'); }
+        else if(no === 11 || no === 12) setState(f, 'crouch');
+        else if(no === 20) setState(f, 'walk');
+        else if(no >= 40 && no <= 52) setState(f, 'jump');
+        else if(no >= 120 && no <= 155) setState(f, 'block');
+        else setState(f, 'idle');
+        f.move = null;
+      },
       playSound(){ playBeep('hit'); },
       // HitDef : le coup devient actif jusqu'à ce qu'il touche ou que l'état change.
       setHitDef(hd){ f.hitDef = hd; f.hitDefUsed = false; },
@@ -493,7 +513,11 @@
       anim: f.anim?.no ?? 0,
       animElem: (f.anim?.i ?? 0) + 1,               // MUGEN indexe à partir de 1
       animElemTime: f.anim?.t ?? 0,
-      animTime: total > 0 ? elapsed - total : 0,     // 0 = animation terminée
+      // 0 = animation terminée. Le drapeau `done` de l'animateur est ce qui
+      // permet à `ChangeState / trigger1 = AnimTime = 0` de se déclencher :
+      // sans lui, l'animation boucle et le personnage reste bloqué dans son
+      // état d'attaque, HitDef actif en permanence.
+      animTime: f.anim?.done ? 0 : (total > 0 ? elapsed - total : 0),
       ctrl: f.cnsCtrl, alive: f.hp > 0,
       life: Math.max(0, Math.round(f.hp/f.maxHp*1000)),
       power: Math.round(f.meter*30),
@@ -572,8 +596,27 @@
     f.x = Math.max(WALL, Math.min(VW-WALL, f.x));
   }
 
+  /**
+   * Demi-largeur de la pushbox. Les personnages MUGEN déclarent la leur
+   * dans [Size] (ground.front / ground.back) : s'en servir évite de les
+   * tenir trop écartés — sinon aucun coup ne porte.
+   */
+  function pushHalf(f){
+    if(f.pushHalfCache != null) return f.pushHalfCache;
+    let half = PUSH;
+    const size = f.mugen?.constants?.size;
+    if(size){
+      const front = parseFloat(size['ground.front']), back = parseFloat(size['ground.back']);
+      if(!isNaN(front) && !isNaN(back)) half = ((front + back) / 2) * (f.r.scale || 1);
+    } else if(f.r.mugen){
+      half = 26 * (f.r.scale || 1);
+    }
+    f.pushHalfCache = Math.max(10, half);
+    return f.pushHalfCache;
+  }
+
   function resolvePush(a, b){
-    const dx = b.x - a.x, min = PUSH*2;
+    const dx = b.x - a.x, min = pushHalf(a) + pushHalf(b);
     if(Math.abs(dx) < min){
       const overlap = (min - Math.abs(dx))/2, dir = dx>=0?1:-1;
       a.x -= overlap*dir; b.x += overlap*dir;
@@ -632,6 +675,7 @@
   // ══════════════ IA adversaire ══════════════
   function aiInput(e, p){
     const out = blankInput();
+    if(e.aiFrozen) return out;
     if(round.state!=='fight' || e.state==='ko' || e.state==='hitstun' || e.state==='attack') return out;
     e.aiT--;
     const dist = Math.abs(p.x - e.x), toward = p.x>e.x?'right':'left', away = p.x>e.x?'left':'right';
@@ -893,6 +937,21 @@
       raf=requestAnimationFrame(frame);
     },
     setTouch(k,v){ this._touch[k]=v; },
+    /** Crochets de test : fige l'IA, place les combattants, force un coup. */
+    _test: {
+      freezeAi(v){ fighters.forEach(f => f.aiFrozen = !!v); },
+      place(i, x){ if(fighters[i]) fighters[i].x = x; },
+      attack(i, move){ if(fighters[i]) startAttack(fighters[i], move); },
+      boxes(i, kind){ return fighters[i] ? clsnBoxes(fighters[i], kind) : null; }
+    },
+    /** État interne, pour le diagnostic et les tests. */
+    debug(){
+      return fighters.map(f => ({
+        id:f.id, hp:Math.round(f.hp), maxHp:f.maxHp, state:f.state,
+        cnsState:f.cns?.stateNo ?? null, hasCns:!!f.cns,
+        hitDef:!!f.hitDef, meter:Math.round(f.meter), x:Math.round(f.x)
+      }));
+    },
     resetTouch(){ this._touch=blankInput(); },
     stop(){ running=false; if(raf)cancelAnimationFrame(raf); raf=null; window.removeEventListener('keydown',this._kd); window.removeEventListener('keyup',this._ku); }
   };

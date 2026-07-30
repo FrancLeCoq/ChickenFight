@@ -562,7 +562,7 @@
       if(this.no === no && !force) return;
       const a = this.char.anims[no];
       if(!a || !a.frames.length) return;          // animation absente → on garde l'actuelle
-      this.no = no; this.anim = a; this.i = 0; this.t = 0;
+      this.no = no; this.anim = a; this.i = 0; this.t = 0; this.done = false;
     }
 
     /** Avance d'une frame de jeu. Renvoie true si l'animation est terminée. */
@@ -570,13 +570,14 @@
       if(!this.anim) return true;
       const f = this.anim.frames[this.i];
       if(!f) return true;
-      if(f.dur < 0) return true;                  // frame finale : on reste dessus
+      if(f.dur < 0){ this.done = true; return true; }   // frame finale : on reste dessus
       this.t++;
       if(this.t >= f.dur){
         this.t = 0;
         this.i++;
         if(this.i >= this.anim.frames.length){
           this.i = this.anim.loopStart || 0;      // bouclage
+          this.done = true;                       // un cycle complet est passé
           return true;
         }
       }
