@@ -44,7 +44,8 @@
     reineMugen:   { mugen:true, def:'chars/reine/reine.def',     scale:0.95 },
     roiMugen:     { mugen:true, def:'chars/roi/roi.def',         scale:1.00 }
   };
-  const mugenCache = {};   // id → personnage chargé
+  const mugenCache = {};   // clé (id#palette) → personnage chargé
+  const mugenLive = {};    // id → personnage utilisé dans le combat courant
 
   // ── Frame data des coups (frames @60fps) ──
   // reach/box en unités monde, relatifs au combattant (devant = +x*facing).
@@ -102,8 +103,14 @@
   async function preloadMugen(ids){
     for(const id of ids){
       const r = RENDER[id];
-      if(!r || !r.mugen || mugenCache[id]) continue;
-      try{ mugenCache[id] = await window.ChickenMugen.loadCharacter(r.def); }
+      if(!r || !r.mugen) continue;
+      const pal = (id === opts?.enemyId) ? opts?.enemyPal : undefined;
+      const key = pal != null ? `${id}#${pal}` : id;
+      if(mugenCache[key]){ mugenLive[id] = mugenCache[key]; continue; }
+      try{
+        mugenCache[key] = await window.ChickenMugen.loadCharacter(r.def, pal);
+        mugenLive[id] = mugenCache[key];
+      }
       catch(e){ console.warn('[ChickenArena] perso MUGEN indisponible:', id, e.message); }
     }
   }
@@ -127,8 +134,8 @@
       // ── systèmes Ikemen GO ──
       cmd: window.ChickenCommand ? new window.ChickenCommand.CommandBuffer(window.ChickenCommand.roosterCommands()) : null,
       // animateur MUGEN si le personnage vient d'un .def
-      mugen: mugenCache[id] || null,
-      anim: mugenCache[id] && window.ChickenMugen ? new window.ChickenMugen.Animator(mugenCache[id]) : null,
+      mugen: mugenLive[id] || null,
+      anim: mugenLive[id] && window.ChickenMugen ? new window.ChickenMugen.Animator(mugenLive[id]) : null,
       // état CNS (personnages MUGEN exécutant leurs vrais coups)
       cns:null, cnsCtrl:true, cnsStateType:'S', cnsMoveType:'I', cnsPhysics:'S',
       cnsJuggle:1, hitDef:null, hitDefUsed:false,
@@ -752,13 +759,14 @@
   }
 
   function drawStage(){
+    const D = (opts && opts.decor) || { sky:'#3a2568', sky2:'#4a2f7a', ground:'#6b4423', ground2:'#3d2712' };
     const g = ctx.createLinearGradient(0,0,0,VH);
-    g.addColorStop(0,'#3a2568'); g.addColorStop(0.62,'#4a2f7a'); g.addColorStop(0.62,'#6b4423'); g.addColorStop(1,'#3d2712');
+    g.addColorStop(0,D.sky); g.addColorStop(0.62,D.sky2); g.addColorStop(0.62,D.ground); g.addColorStop(1,D.ground2);
     ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
     // foule
     ctx.fillStyle='rgba(255,255,255,.06)'; ctx.fillRect(0,VH*0.32,VW,18);
     // sol
-    ctx.fillStyle='#7a4a22'; ctx.fillRect(0,GROUND,VW,VH-GROUND);
+    ctx.fillStyle=D.ground; ctx.fillRect(0,GROUND,VW,VH-GROUND);
     ctx.strokeStyle='rgba(255,213,74,.25)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,GROUND); ctx.lineTo(VW,GROUND); ctx.stroke();
   }
 

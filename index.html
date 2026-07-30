@@ -39,34 +39,28 @@
       </div>
 
       <div class="card menu-card">
-        <button class="menu-btn arena-live" type="button" id="realtimeBtn">
-          <span class="menu-ico">🎮</span>
-          <span class="menu-text"><b>COMBAT</b><small>Baston temps réel — Coq ▸ Valet ▸ Reine ▸ Roi</small></span>
-          <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
-        </button>
-
-        <button class="menu-btn free" type="button" data-open-mode="training">
+        <button class="menu-btn free" type="button" id="freeTrainingBtn">
           <span class="menu-ico">🥊</span>
-          <span class="menu-text"><b data-i18n="training">ENTRAÎNEMENT</b><small data-i18n="trainingSub">Combat gratuit contre le Valet</small></span>
+          <span class="menu-text"><b>ENTRAÎNEMENT LIBRE</b><small>Affronte Kung Fu Man — choisis ton intensité</small></span>
           <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
         </button>
 
-        <button class="menu-btn premium" type="button" data-open-mode="campaign">
-          <span class="menu-ico">👑</span>
-          <span class="menu-text"><b data-i18n="campaign">CAMPAGNE ROYALE</b><small data-i18n="campaignSub">Valet, Reine puis Roi</small></span>
-          <span class="access-lock" data-lock-for="campaign"></span>
-        </button>
-
-        <button class="menu-btn premium" type="button" data-open-mode="arena">
+        <button class="menu-btn arena-live" type="button" id="realtimeBtn">
           <span class="menu-ico">🏆</span>
-          <span class="menu-text"><b data-i18n="arena">ARÈNE CLASSÉE</b><small data-i18n="arenaSub">Grimpe dans le classement local</small></span>
-          <span class="access-lock" data-lock-for="arena"></span>
+          <span class="menu-text"><b>COMBAT</b><small>Campagne — 5 combattants, décors variés</small></span>
+          <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
         </button>
 
-        <button class="menu-btn premium" type="button" data-open-mode="duel">
+        <button class="menu-btn rooster-mode" type="button" id="roosterFightBtn">
+          <span class="menu-ico">🐓</span>
+          <span class="menu-text"><b>COMBAT DE COQ</b><small>Les vrais coqs s'affrontent — débloque-les</small></span>
+          <span class="access-pill free-pill" data-i18n="free">GRATUIT</span>
+        </button>
+
+        <button class="menu-btn soon" type="button" id="duelOnlineBtn">
           <span class="menu-ico">⚔️</span>
-          <span class="menu-text"><b data-i18n="duel">DUEL LOCAL</b><small data-i18n="duelSub">Deux joueurs, un téléphone</small></span>
-          <span class="access-lock" data-lock-for="duel"></span>
+          <span class="menu-text"><b>DUEL ONLINE</b><small>Affronte d'autres joueurs en ligne</small></span>
+          <span class="access-pill soon-pill">SOON</span>
         </button>
 
         <button class="menu-btn secondary" type="button" id="profileBtn">
@@ -160,10 +154,24 @@
       </div>
     </section>
 
+    <section class="screen" id="screen-select" data-screen="select">
+      <div class="section-head">
+        <h2 id="selectTitle">COMBAT</h2>
+        <p id="selectIntro">Choisis l'intensité, puis ton adversaire.</p>
+      </div>
+      <div class="diff-row" id="diffRow">
+        <button class="diff-btn" type="button" data-diff="easy"><b>FACILE</b><small>Adversaire prudent</small></button>
+        <button class="diff-btn active" type="button" data-diff="medium"><b>MOYEN</b><small>Combat équilibré</small></button>
+        <button class="diff-btn" type="button" data-diff="hard"><b>DUR</b><small>Aucun répit</small></button>
+      </div>
+      <div class="xp-banner card" id="xpBanner"></div>
+      <div class="roster-grid" id="fightRoster"></div>
+    </section>
+
     <section class="screen realtime-screen" id="screen-realtime" data-screen="realtime">
       <div class="rt-topline">
-        <span class="mode-badge" id="rtLadderBadge">ÉVOLUTION 1/3</span>
-        <button class="quit-link" id="rtQuitBtn" type="button">Quitter</button>
+        <button class="rt-back" id="rtBackBtn" type="button" aria-label="Retour">⬅️</button>
+        <span class="mode-badge" id="rtLadderBadge">COMBAT</span>
       </div>
       <div class="rt-stage"><canvas id="rtCanvas" width="640" height="360"></canvas></div>
       <div class="rt-controls">
@@ -249,6 +257,18 @@
       <h2 id="passTitle">Passe le téléphone</h2>
       <p id="passText">Joueur 2, ne regarde pas le choix du Joueur 1.</p>
       <button class="primary-action" id="passReadyBtn" type="button">JE SUIS PRÊT</button>
+    </div>
+  </div>
+
+  <div class="overlay rotate-overlay" id="rotateOverlay" aria-hidden="true">
+    <div class="modal rotate-card">
+      <div class="rotate-icon">📱</div>
+      <h2>TOURNE TON ÉCRAN</h2>
+      <p>Le combat est bien plus lisible en <b>mode paysage</b> : décor plus large et commandes sur les côtés.</p>
+      <div class="modal-actions">
+        <button class="modal-btn green" id="rotateOkBtn" type="button">C'EST FAIT, JE COMBATS</button>
+        <button class="modal-btn purple" id="rotateSkipBtn" type="button">CONTINUER EN PORTRAIT</button>
+      </div>
     </div>
   </div>
 

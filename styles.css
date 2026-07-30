@@ -307,6 +307,41 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 @keyframes boomPop{0%{opacity:0;transform:translate(-50%,50%) scale(.2)}28%{opacity:1;transform:translate(-50%,50%) scale(1.35)}100%{opacity:0;transform:translate(-50%,50%) scale(1.75)}}
 .yolk{position:absolute;left:50%;bottom:44%;width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fef08a,#f59e0b);z-index:7;pointer-events:none;transform:rotate(var(--a,0deg)) translateY(0);animation:yolkFly .6s ease-out forwards}
 @keyframes yolkFly{to{transform:rotate(var(--a,0deg)) translateY(-48px) scale(.3);opacity:0}}
+/* ---- Menu : nouveaux modes ---- */
+.menu-btn.rooster-mode{background:linear-gradient(135deg,#b45309,#78350f)}
+.menu-btn.soon{background:linear-gradient(135deg,#475569,#1e293b);opacity:.75}
+.soon-pill{background:rgba(255,255,255,.18);letter-spacing:1px}
+
+/* ---- Écran de sélection : intensité + roster ---- */
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.diff-btn{border:2px solid rgba(255,255,255,.16);border-radius:16px;padding:12px 6px;cursor:pointer;
+  background:linear-gradient(150deg,#3b2170,#241046);display:flex;flex-direction:column;gap:3px;align-items:center;
+  transition:transform .1s,border-color .15s,box-shadow .15s}
+.diff-btn b{font-family:"Bangers",cursive;font-size:19px;letter-spacing:1px;font-weight:400}
+.diff-btn small{font-size:8px;color:var(--muted);line-height:1.2;text-align:center}
+.diff-btn:active{transform:scale(.96)}
+.diff-btn[data-diff="easy"].active{background:linear-gradient(150deg,#16a34a,#14532d);border-color:#4ade80;box-shadow:0 0 18px rgba(34,197,94,.35)}
+.diff-btn[data-diff="medium"].active{background:linear-gradient(150deg,#d97706,#92400e);border-color:#fbbf24;box-shadow:0 0 18px rgba(217,119,6,.35)}
+.diff-btn[data-diff="hard"].active{background:linear-gradient(150deg,#be123c,#7f1d1d);border-color:#fb7185;box-shadow:0 0 18px rgba(190,18,60,.4)}
+.diff-btn.active small{color:rgba(255,255,255,.9)}
+.xp-banner{padding:10px 12px;margin-bottom:12px;font-size:11px;display:flex;align-items:center;gap:10px;justify-content:center}
+.xp-banner b{color:var(--gold);font-family:"Bangers",cursive;font-size:17px;letter-spacing:1px}
+.fighter-card{position:relative;border:1.5px solid var(--line);border-radius:18px;padding:8px;cursor:pointer;text-align:center;
+  background:linear-gradient(145deg,var(--card),var(--card2));min-height:150px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.fighter-card canvas{height:82px;width:auto;image-rendering:pixelated;filter:drop-shadow(0 6px 8px rgba(0,0,0,.45))}
+.fighter-card b{font-family:"Bangers",cursive;font-size:15px;letter-spacing:.6px;color:var(--gold);font-weight:400}
+.fighter-card small{font-size:8px;color:var(--muted);line-height:1.25}
+.fighter-card.locked{background:linear-gradient(145deg,#d97706,#92400e);filter:saturate(.85);cursor:not-allowed}
+.fighter-card.locked b,.fighter-card.locked small{color:rgba(255,255,255,.92)}
+.fighter-card .card-lock{position:absolute;right:8px;top:8px}
+.fighter-card .card-lock svg{width:22px;height:22px;display:block}
+.fighter-card .req{font-size:8px;color:#fde68a}
+
+/* ---- Invitation au mode paysage ---- */
+.rotate-card{max-width:330px}
+.rotate-icon{font-size:56px;animation:rotateHint 1.8s ease-in-out infinite}
+@keyframes rotateHint{0%,100%{transform:rotate(0)}50%{transform:rotate(90deg)}}
+
 /* ---- Arène temps réel (moteur de baston) ---- */
 .menu-btn.arena-live{background:linear-gradient(135deg,#be123c,#7f1d1d)}
 .rt-topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
@@ -329,6 +364,32 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 .rt-egg{background:radial-gradient(circle at 38% 32%,#f59e0b,#b45309)}
 .rt-hint{font-size:8.5px;color:var(--muted);text-align:center;margin:8px 2px 0;line-height:1.4}
 @media(min-width:560px){.rt-hint{font-size:10px}}
+/* Bouton retour, bien visible et opaque */
+.rt-back{width:44px;height:40px;border:2px solid rgba(255,255,255,.35);border-radius:12px;
+  background:rgba(13,5,32,.92);font-size:20px;cursor:pointer;line-height:1;
+  box-shadow:0 3px 10px rgba(0,0,0,.5)}
+.rt-back:active{transform:scale(.93)}
+
+/* ══════ MODE PAYSAGE ══════
+   Décor plein écran, commandes opaques superposées sur les côtés :
+   on gagne toute la hauteur pour l'arène. */
+@media (orientation: landscape) and (max-height: 560px){
+  body{padding:0;overflow:hidden}
+  .app{width:100%;max-width:none}
+  .topbar{display:none}
+  .realtime-screen.active{position:fixed;inset:0;z-index:5;padding:0;display:flex;flex-direction:column}
+  .rt-stage{flex:1;border-radius:0;border:0;min-height:0}
+  #rtCanvas{width:100%;height:100%;aspect-ratio:auto;object-fit:cover}
+  .rt-hint{display:none}
+  .rt-topline{position:absolute;top:8px;left:8px;right:8px;z-index:20;margin:0;pointer-events:none}
+  .rt-topline > *{pointer-events:auto}
+  /* commandes flottantes, semi-opaques, réparties de part et d'autre */
+  .rt-controls{position:absolute;inset:auto 0 0 0;z-index:15;display:block;margin:0;
+    padding:0 12px calc(10px + env(safe-area-inset-bottom));pointer-events:none;background:none}
+  .rt-pad{position:absolute;left:14px;bottom:12px;width:132px;height:132px;opacity:.82;pointer-events:auto}
+  .rt-buttons{position:absolute;right:14px;bottom:12px;width:150px;height:150px;opacity:.86;pointer-events:auto}
+  .rt-dir,.rt-atk{backdrop-filter:blur(3px)}
+}
 .overlay{position:fixed;inset:0;z-index:50;background:rgba(4,1,12,.84);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:22px}
 .overlay.show{display:flex;animation:fade .2s ease}
 @keyframes fade{from{opacity:0}}

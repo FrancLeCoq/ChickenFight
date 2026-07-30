@@ -354,7 +354,7 @@
   }
 
   function screenTitle(name){
-    const map = { menu:'', campaign:tr('campaign'), arena:tr('arena'), duel:tr('duel'), profile:tr('profile'), realtime:'ARÈNE TEMPS RÉEL', battle:battle ? tr(`mode${capitalize(battle.mode)}`) : '' };
+    const map = { menu:'', campaign:tr('campaign'), arena:tr('arena'), duel:tr('duel'), profile:tr('profile'), realtime:'COMBAT', select:'SÉLECTION', battle:battle ? tr(`mode${capitalize(battle.mode)}`) : '' };
     return map[name] || '';
   }
 
@@ -989,9 +989,10 @@
     if(action==='menu') goMenu();
     if(action==='share') shareResult();
     if(action==='forfeit'){ closeModal(); finishBattle(true); }
-    if(action==='rtNext'){ closeModal(); rtStage++; startRtStage(); }
-    if(action==='rtRetry'){ closeModal(); startRtStage(); }
-    if(action==='rtMenu'){ closeModal(); rtQuit(); }
+    if(action==='rtRetry'){ closeModal(); startFight(); }
+    if(action==='rtSelect'){ rtToSelect(); }
+    if(action==='rtForfeit'){ rtForfeit(); }
+    if(action==='rtMenu'){ rtQuit(); }
   }
 
   // ══════════════ ARÈNE TEMPS RÉEL (moteur ChickenArena) ══════════════
@@ -1002,88 +1003,269 @@
   // Le joueur incarne Coq Fu Man : corps pixel art, tête de coq, cohérent
   // avec les personnages Ikemen GO qu'il affronte. Il monte en puissance à
   // chaque palier (le grade est purement statistique, comme les évolutions).
-  const RT_LADDER = [
-    { player:'coqfu', enemy:'kfm',    ai:.30, php:200, ehp:180, epow:.90, grade:'COQ' },
-    { player:'coqfu', enemy:'kfm',    ai:.52, php:215, ehp:210, epow:1.00, grade:'VALET' },
-    { player:'coqfu', enemy:'kfm720', ai:.72, php:230, ehp:240, epow:1.12, grade:'REINE' },
-    { player:'coqfu', enemy:'kfm720', ai:.88, php:250, ehp:270, epow:1.22, grade:'ROI', label:'BOSS' }
-  ];
-  let rtStage = 0, rtBound = false, rtActive = false;
+  // ══════════════ MODES DE COMBAT (moteur ChickenArena) ══════════════
+  // Trois modes partagent le même écran et les mêmes commandes :
+  //   • entraînement libre  : Kung Fu Man seul, pour apprendre
+  //   • combat              : campagne de 5 adversaires, décors variés
+  //   • combat de coq       : les coqs entre eux, IA à personnage aléatoire
+  // Les adversaires du mode Combat sont des variantes de palette du même
+  // personnage : c'est la méthode MUGEN pour obtenir un roster visuellement
+  // distinct à partir d'une seule banque de sprites.
 
-  // Nom affichable : les persos maison viennent de CHARACTERS, les persos
-  // au format Ikemen GO ont leur propre nom dans leur fichier .def.
-  const RT_EXTRA_NAMES = {
-    kfm:'Kung Fu Man', kfm720:'Kung Fu Man',
-    francisMugen:'Francis', valetMugen:'Le Valet',
-    reineMugen:'La Reine', roiMugen:'Le Roi'
+  const DIFFS = {
+    easy:   { label:'FACILE', ai:.18, ehpMul:.80, epowMul:.70, xpMul:1 },
+    medium: { label:'MOYEN',  ai:.45, ehpMul:1.0, epowMul:1.0, xpMul:2 },
+    hard:   { label:'DUR',    ai:.80, ehpMul:1.25, epowMul:1.35, xpMul:4 }
   };
-  function rtName(id){ return CHARACTERS[id] ? characterName(id) : (RT_EXTRA_NAMES[id] || id); }
 
-  function openRealtime(){
-    rtStage = 0;
-    bindRtControls();
-    showScreen('realtime');
-    startRtStage();
+  // Décors : ambiances de scène passées au moteur.
+  const DECORS = {
+    dojo:    { sky:'#3a2568', sky2:'#4a2f7a', ground:'#7a4a22', ground2:'#3d2712' },
+    sunset:  { sky:'#7c2d12', sky2:'#b45309', ground:'#78350f', ground2:'#431407' },
+    ice:     { sky:'#0c4a6e', sky2:'#0369a1', ground:'#94a3b8', ground2:'#334155' },
+    forest:  { sky:'#14532d', sky2:'#166534', ground:'#4d7c0f', ground2:'#1a2e05' },
+    throne:  { sky:'#4c1d95', sky2:'#7c3aed', ground:'#78350f', ground2:'#3b0764' },
+    arena:   { sky:'#1e1b4b', sky2:'#312e81', ground:'#92400e', ground2:'#451a03' }
+  };
+
+  // Roster du mode Combat : palettes différentes du même personnage.
+  const FIGHT_ROSTER = [
+    { id:'kfm',  pal:0,  name:'Kung Fu Man',  desc:'Le maître du dojo',      decor:'dojo',   hp:180, pow:0.95, xp:0,    holder:false },
+    { id:'kfm',  pal:3,  name:'Le Spadassin', desc:'Rapide et imprévisible', decor:'sunset', hp:200, pow:1.05, xp:300,  holder:true },
+    { id:'kfm',  pal:6,  name:'Le Givré',     desc:'Encaisse et contre',     decor:'ice',    hp:230, pow:1.10, xp:800,  holder:true },
+    { id:'kfm',  pal:9,  name:'L’Ombre', desc:'Frappe sans prévenir',   decor:'forest', hp:250, pow:1.20, xp:1500, holder:true },
+    { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',     decor:'throne', hp:280, pow:1.35, xp:3000, holder:true }
+  ];
+
+  // Roster du mode Combat de Coq : les vrais coqs.
+  const ROOSTER_ROSTER = [
+    { id:'coqfu',       name:'Coq Fu Man', desc:'Ton champion',            decor:'arena',  hp:200, pow:1.00, xp:0,    holder:false },
+    { id:'valetMugen',  name:'Le Valet',   desc:'Lance son épée',          decor:'sunset', hp:215, pow:1.08, xp:400,  holder:true },
+    { id:'reineMugen',  name:'La Reine',   desc:'Couronne tranchante',     decor:'ice',    hp:225, pow:1.15, xp:1000, holder:true },
+    { id:'roiMugen',    name:'Le Roi',     desc:'Décret royal dévastateur', decor:'throne', hp:245, pow:1.25, xp:2000, holder:true }
+  ];
+
+  // Répliques de l'IA, pour donner du caractère aux combats.
+  const TAUNTS = {
+    intro: ['Tu vas plumer, gamin !', 'On va voir ce que tu as dans le gésier.',
+            'Prépare-toi à finir en cocotte.', 'Le poulailler tremble déjà.'],
+    hit:   ['Ça pique, hein ?', 'Encore un peu et tu es à la casserole !', 'Trop lent !'],
+    win:   ['Retourne pondre.', 'Le poulailler a un nouveau maître.', 'C’était couru d’avance.'],
+    lose:  ['Impossible… un coq m’a battu ?!', 'Tu as gagné… pour cette fois.']
+  };
+  const pick = a => a[Math.floor(Math.random()*a.length)];
+
+  let rtBound = false, rtActive = false;
+  let rtMode = 'fight';                 // 'training' | 'fight' | 'rooster'
+  let rtDiff = 'medium';
+  let rtOpponent = null;                // entrée de roster choisie
+  let rtRosterCache = {};
+
+  const rtRoster = () => rtMode === 'rooster' ? ROOSTER_ROSTER : FIGHT_ROSTER;
+
+  /** Un adversaire est-il débloqué ? (XP acquise + statut holder) */
+  function rtUnlocked(entry){
+    if(!entry.holder) return true;
+    return isHolder && profile.xp >= entry.xp;
   }
 
-  function startRtStage(){
+  // ── Écran de sélection ──
+  function openSelect(mode){
+    rtMode = mode;
+    bindRtControls();
+    $('#selectTitle').textContent =
+      mode === 'rooster' ? '🐓 COMBAT DE COQ' : mode === 'training' ? '🥊 ENTRAÎNEMENT LIBRE' : '🏆 COMBAT';
+    $('#selectIntro').textContent =
+      mode === 'training' ? 'Affronte Kung Fu Man et règle l’intensité.'
+      : mode === 'rooster' ? 'Les coqs s’affrontent. L’IA prend un combattant au hasard.'
+      : 'Choisis l’intensité, puis ton adversaire.';
+    renderDiff();
+    renderRoster();
+    showScreen('select');
+  }
+
+  function renderDiff(){
+    $$('#diffRow .diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === rtDiff));
+  }
+
+  function renderXpBanner(){
+    const next = rtRoster().find(e => !rtUnlocked(e) && e.xp > profile.xp);
+    $('#xpBanner').innerHTML = next
+      ? `🪶 <b>${profile.xp} XP</b> — encore <b>${Math.max(0, next.xp - profile.xp)} XP</b> pour ${next.name}`
+      : `🪶 <b>${profile.xp} XP</b> — tous les combattants accessibles sont débloqués`;
+  }
+
+  function renderRoster(){
+    renderXpBanner();
+    const root = $('#fightRoster');
+    const list = rtMode === 'training' ? [FIGHT_ROSTER[0]] : rtRoster();
+    root.innerHTML = list.map((e, i) => {
+      const ok = rtUnlocked(e);
+      const need = !isHolder ? 'Réservé aux holders $FRANC'
+                 : profile.xp < e.xp ? `${e.xp} XP requis` : '';
+      return `<button class="fighter-card ${ok?'':'locked'}" type="button" data-fighter-idx="${i}" ${ok?'':'disabled'}>
+        ${ok?'':`<span class="card-lock">${lockSvg(false)}</span>`}
+        <canvas data-portrait="${i}" width="80" height="90"></canvas>
+        <b>${e.name}</b>
+        <small>${e.desc}</small>
+        ${ok?'':`<span class="req">${need}</span>`}
+      </button>`;
+    }).join('');
+    $$('[data-fighter-idx]', root).forEach(btn => btn.addEventListener('click', () => {
+      const e = list[Number(btn.dataset.fighterIdx)];
+      if(!rtUnlocked(e)){ toast(!isHolder ? tr('actionLocked') : `Il te faut ${e.xp} XP.`); return; }
+      rtOpponent = e; askRotate();
+    }));
+    drawPortraits(list);
+  }
+
+  /** Vignettes : sprite d'attente du personnage, dans sa palette. */
+  async function drawPortraits(list){
+    for(let i = 0; i < list.length; i++){
+      const e = list[i];
+      const cv = $(`canvas[data-portrait="${i}"]`);
+      if(!cv || !window.ChickenMugen) continue;
+      const key = `${e.id}#${e.pal ?? 0}`;
+      try{
+        rtRosterCache[key] ||= await window.ChickenMugen.loadCharacter(
+          rtDefPath(e.id), e.pal ?? undefined);
+        const spr = rtRosterCache[key].sprite(0, 0);
+        if(!spr) continue;
+        const ctx = cv.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        const s = Math.min(cv.width / spr.canvas.width, cv.height / spr.canvas.height);
+        const w = spr.canvas.width * s, h = spr.canvas.height * s;
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(spr.canvas, (cv.width - w)/2, cv.height - h, w, h);
+      }catch{ /* vignette indisponible → carte sans image */ }
+    }
+  }
+  function rtDefPath(id){
+    const map = { kfm:'chars/kfm/kfm.def', kfm720:'chars/kfm720/kfm720.def',
+      coqfu:'chars/coqfu/coqfu.def', francisMugen:'chars/francis/francis.def',
+      valetMugen:'chars/valet/valet.def', reineMugen:'chars/reine/reine.def',
+      roiMugen:'chars/roi/roi.def' };
+    return map[id] || map.kfm;
+  }
+
+  // ── Invitation au mode paysage, avant chaque combat ──
+  function askRotate(){
+    const landscape = window.matchMedia('(orientation: landscape)').matches;
+    if(landscape){ startFight(); return; }
+    $('#rotateOverlay').classList.add('show');
+    $('#rotateOverlay').setAttribute('aria-hidden','false');
+  }
+  function closeRotate(){
+    $('#rotateOverlay').classList.remove('show');
+    $('#rotateOverlay').setAttribute('aria-hidden','true');
+  }
+
+  // ── Combat ──
+  function startFight(){
+    closeRotate();
     if(!window.ChickenArena){ toast('Moteur indisponible'); return; }
-    const cfg = RT_LADDER[rtStage];
-    const badge = cfg.label ? cfg.label : `ÉVOLUTION ${rtStage+1}/${RT_LADDER.length}`;
-    const grade = cfg.grade ? ` ${cfg.grade}` : '';
-    $('#rtLadderBadge').textContent = `${badge} — COQ FU MAN${grade} vs ${rtName(cfg.enemy).toUpperCase()}`;
-    const canvas = $('#rtCanvas');
+    const d = DIFFS[rtDiff], e = rtOpponent || rtRoster()[0];
+    // En combat de coq, l'IA prend un combattant au hasard.
+    const enemy = rtMode === 'rooster'
+      ? ROOSTER_ROSTER[randomInt(0, ROOSTER_ROSTER.length-1)]
+      : e;
+    const playerId = rtMode === 'rooster' ? (rtOpponent?.id || 'coqfu') : 'coqfu';
+
+    $('#rtLadderBadge').textContent = `${d.label} — ${enemy.name.toUpperCase()}`;
     ChickenArena.muted = !soundEnabled;
     ChickenArena.resetTouch();
     rtActive = true;
+    showScreen('realtime');
     ChickenArena.start({
-      canvas, playerId: cfg.player, enemyId: cfg.enemy,
-      playerStats:{ hp:cfg.php, power:1, defense:1 },
-      enemyStats:{ hp:cfg.ehp, power:cfg.epow, defense:1, ai:cfg.ai },
+      canvas: $('#rtCanvas'),
+      playerId, enemyId: enemy.id, enemyPal: enemy.pal,
+      decor: DECORS[enemy.decor] || DECORS.dojo,
+      playerStats:{ hp:210, power:1, defense:1 },
+      enemyStats:{ hp:Math.round(enemy.hp * d.ehpMul), power:enemy.pow * d.epowMul, defense:1, ai:d.ai },
       time:60, best:2,
       onEnd: rtOnEnd
     });
+    setTimeout(() => toast(`💬 ${pick(TAUNTS.intro)}`), 900);
   }
 
   function rtOnEnd(result){
     rtActive = false;
-    const cfg = RT_LADDER[rtStage];
+    const d = DIFFS[rtDiff], e = rtOpponent || rtRoster()[0];
     if(result.win){
-      profile.feathers += 20; profile.xp += 40; saveProfile(); renderProfile();
-      if(rtStage >= RT_LADDER.length-1){
-        confetti(); playSound('win'); haptic('success');
-        showModal(`<img class="result-rooster" src="assets/francis-happy.webp" alt="">
-          <h2>ROI DU POULAILLER 👑</h2>
-          <p>Ton coq a tout absorbé : Valet, Reine et Roi. Évolution ultime atteinte !</p>
-          <div class="modal-actions"><button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button></div>`);
-      }else{
-        confetti(); playSound('win'); haptic('success');
-        const next = RT_LADDER[rtStage+1];
-        const evoIcon = { VALET:'🎴', REINE:'👸', ROI:'👑' }[next.grade] || '🐓';
-        showModal(`<div style="font-size:52px">🐔➡️${evoIcon}</div>
-          <h2>ÉVOLUTION !</h2>
-          <p>Victoire sur ${rtName(cfg.enemy)} ! Ton coq évolue au grade <b>${next.grade}</b> et affronte <b>${rtName(next.enemy)}</b>.</p>
-          <div class="modal-actions">
-            <button class="modal-btn green" data-modal-action="rtNext">CONTINUER</button>
-            <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
-          </div>`);
-      }
-    }else{
-      playSound('lose'); haptic('error');
-      showModal(`<img class="result-rooster" src="assets/francis-sad.webp" alt="">
-        <h2>${tr('defeat')}</h2>
-        <p>${rtName(cfg.enemy)} t'a dominé. Réessaie ce palier d'évolution.</p>
+      const gain = Math.round(60 * d.xpMul * (1 + (e.xp/3000)));
+      const before = profile.xp;
+      profile.xp += gain; profile.feathers += Math.round(gain/3);
+      profile.wins++; profile.streak++;
+      profile.bestStreak = Math.max(profile.bestStreak, profile.streak);
+      saveProfile(); renderProfile();
+      // Déblocages atteints grâce à ce gain
+      const freshly = rtRoster().filter(x => x.holder && x.xp > before && x.xp <= profile.xp);
+      const unlockTxt = freshly.length && isHolder
+        ? `<p><b>🔓 DÉBLOQUÉ : ${freshly.map(x=>x.name).join(', ')}</b></p>` : '';
+      confetti(); playSound('win'); haptic('success');
+      showModal(`<div style="font-size:52px">🏆</div>
+        <h2>${tr('victory')}</h2>
+        <p>💬 « ${pick(TAUNTS.lose)} »</p>
+        <div class="reward-line"><span class="reward-chip">+${gain} XP</span><span class="reward-chip">🪶 +${Math.round(gain/3)}</span></div>
+        ${unlockTxt}
         <div class="modal-actions">
-          <button class="modal-btn green" data-modal-action="rtRetry">${tr('replay')}</button>
-          <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
+          <button class="modal-btn green" data-modal-action="rtRetry">REJOUER</button>
+          <button class="modal-btn purple" data-modal-action="rtSelect">CHOISIR UN ADVERSAIRE</button>
+          <button class="modal-btn orange" data-modal-action="rtMenu">${tr('menu')}</button>
+        </div>`);
+    }else{
+      profile.losses++; profile.streak = 0;
+      profile.xp += 10; saveProfile(); renderProfile();
+      playSound('lose'); haptic('error');
+      showModal(`<div style="font-size:52px">💀</div>
+        <h2>GAME OVER</h2>
+        <p>💬 « ${pick(TAUNTS.win)} »</p>
+        <div class="reward-line"><span class="reward-chip">+10 XP</span></div>
+        <div class="modal-actions">
+          <button class="modal-btn green" data-modal-action="rtRetry">REJOUER</button>
+          <button class="modal-btn purple" data-modal-action="rtSelect">CHOISIR UN ADVERSAIRE</button>
+          <button class="modal-btn orange" data-modal-action="rtMenu">${tr('menu')}</button>
         </div>`);
     }
   }
 
-  function rtQuit(){
-    rtActive = false;
+  /** Retour en arrière pendant un combat : confirmation puis GAME OVER. */
+  function rtBack(){
+    if(!rtActive){ rtToSelect(); return; }
+    showModal(`<div style="font-size:48px">🏳️</div>
+      <h2>ABANDON DU COMBAT ?</h2>
+      <p>Quitter maintenant compte comme une défaite.</p>
+      <div class="modal-actions">
+        <button class="modal-btn orange" data-modal-action="rtForfeit">OUI, J’ABANDONNE</button>
+        <button class="modal-btn purple" data-modal-action="close">CONTINUER LE COMBAT</button>
+      </div>`);
+  }
+  function rtForfeit(){
+    closeModal();
     window.ChickenArena?.stop();
-    ChickenArena?.resetTouch?.();
+    rtActive = false;
+    profile.losses++; profile.streak = 0; saveProfile(); renderProfile();
+    playSound('lose'); haptic('error');
+    showModal(`<div style="font-size:52px">💀</div>
+      <h2>GAME OVER</h2>
+      <p>Tu as abandonné le combat.</p>
+      <div class="modal-actions">
+        <button class="modal-btn green" data-modal-action="rtRetry">REJOUER</button>
+        <button class="modal-btn purple" data-modal-action="rtSelect">CHOISIR UN ADVERSAIRE</button>
+        <button class="modal-btn orange" data-modal-action="rtMenu">${tr('menu')}</button>
+      </div>`);
+  }
+  function rtToSelect(){
+    closeModal();
+    window.ChickenArena?.stop();
+    rtActive = false;
+    renderRoster();
+    showScreen('select', false);
+  }
+  function rtQuit(){
+    closeModal();
+    window.ChickenArena?.stop();
+    rtActive = false;
     goMenu();
   }
 
@@ -1104,7 +1286,12 @@
       btn.addEventListener('pointerdown',down);
       btn.addEventListener('pointerup',up); btn.addEventListener('pointerleave',up); btn.addEventListener('pointercancel',up);
     });
-    $('#rtQuitBtn').addEventListener('click', rtQuit);
+    $('#rtBackBtn').addEventListener('click', rtBack);
+    $$('#diffRow .diff-btn').forEach(b => b.addEventListener('click', () => {
+      rtDiff = b.dataset.diff; renderDiff();
+    }));
+    $('#rotateOkBtn').addEventListener('click', startFight);
+    $('#rotateSkipBtn').addEventListener('click', startFight);
   }
 
   function shareResult(){
@@ -1169,7 +1356,10 @@
   function bindEvents(){
     $$('[data-open-mode]').forEach(btn=>btn.addEventListener('click',()=>openMode(btn.dataset.openMode)));
     $('#profileBtn').addEventListener('click',()=>{renderProfile();showScreen('profile');});
-    $('#realtimeBtn').addEventListener('click',openRealtime);
+    $('#realtimeBtn').addEventListener('click',()=>openSelect('fight'));
+    $('#freeTrainingBtn').addEventListener('click',()=>openSelect('training'));
+    $('#roosterFightBtn').addEventListener('click',()=>openSelect('rooster'));
+    $('#duelOnlineBtn').addEventListener('click',()=>toast('Duel en ligne : bientôt disponible !'));
     $('#walletBtn').addEventListener('click',goWallet);
     $('#flagFr').addEventListener('click',()=>setLang('fr'));
     $('#flagEn').addEventListener('click',()=>setLang('en'));
