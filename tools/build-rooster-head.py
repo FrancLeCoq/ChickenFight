@@ -20,7 +20,7 @@ Usage :  python3 tools/build-rooster-head.py
 import os, sys, shutil, struct
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sff import read_sff, write_sff_v1
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC  = os.path.join(ROOT, 'chars', 'kfm')
@@ -89,6 +89,14 @@ def main():
     # Tête de coq : quantifiée sur peu de couleurs pour tenir dans la palette.
     head = Image.open(HEAD_IMG).convert('RGBA')
     head = head.crop(head.getbbox())
+    # Nettoyage des bords : l'image d'origine a un halo semi-transparent qui,
+    # une fois quantifié sur une palette indexée (sans canal alpha), donne
+    # des pixels sales autour de la tête. On binarise donc l'alpha et on
+    # érode d'un pixel pour supprimer le liseré.
+    a = head.split()[3].point(lambda v: 255 if v >= 170 else 0)
+    a = a.filter(ImageFilter.MinFilter(3))
+    head.putalpha(a)
+    head = head.crop(head.getbbox())
     NCOL = 24
     rgbq = head.convert('RGB').quantize(colors=NCOL, method=Image.MEDIANCUT)
     qpal = rgbq.getpalette()[:NCOL*3]
@@ -129,7 +137,7 @@ def main():
                 for tx in range(tw):
                     x = ox + tx
                     if not (0 <= x < w): continue
-                    if ap[tx, ty] < 110: continue
+                    if ap[tx, ty] < 200: continue
                     idx[row+x] = slot0 + hp[tx, ty]
             swapped += 1
         out_sprites.append(dict(group=s['group'], image=s['image'],

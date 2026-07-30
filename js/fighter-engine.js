@@ -105,10 +105,11 @@
       const r = RENDER[id];
       if(!r || !r.mugen) continue;
       const pal = (id === opts?.enemyId) ? opts?.enemyPal : undefined;
-      const key = pal != null ? `${id}#${pal}` : id;
+      const skin = (id === opts?.enemyId) ? opts?.enemySkin : undefined;
+      const key = `${id}#${pal ?? 'd'}#${skin ?? 'd'}`;
       if(mugenCache[key]){ mugenLive[id] = mugenCache[key]; continue; }
       try{
-        mugenCache[key] = await window.ChickenMugen.loadCharacter(r.def, pal);
+        mugenCache[key] = await window.ChickenMugen.loadCharacter(r.def, pal, skin);
         mugenLive[id] = mugenCache[key];
       }
       catch(e){ console.warn('[ChickenArena] perso MUGEN indisponible:', id, e.message); }
@@ -293,14 +294,14 @@
     // HitDef issus de son .cns) plutôt que la table de coups du moteur.
     if(f.cns && startCnsAttack(f, moveName)){
       if(MOVES[moveName]?.label) banner(MOVES[moveName].label, MOVES[moveName].super?'super':'move');
-      if(MOVES[moveName]?.super) freeze(MOVES[moveName].freeze||30);
+      if(MOVES[moveName]?.super) freezeSuper(MOVES[moveName].freeze||30);
       return;
     }
     f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false; f.hitCount=0;
     if(f.move.projectile){ f.spawned=false; }
     if(f.move.invuln) f.invuln = f.move.invuln;
     if(f.move.label) banner(f.move.label, f.move.super?'super':'move');
-    if(f.move.super){ freeze(f.move.freeze||30); playBeep('super'); }
+    if(f.move.super){ freezeSuper(f.move.freeze||30); playBeep('super'); }
     else if(f.move.special) playBeep('special');
   }
   function runAttack(f, opp){
@@ -378,6 +379,7 @@
     att.meter = Math.min(100, att.meter + m.meter);
     def.meter = Math.min(100, def.meter + Math.round(m.meter*0.4));
     shake(m.super?12:(m.dmg>=13?9:5));
+    blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     popDamage(def.x, GROUND-120, dmg);
     if(isFinal && att.combo>=2) popCombo(att);
   }
@@ -425,7 +427,8 @@
     att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
     def.meter = clampN(def.meter + 3, 0, 100);
     // pausetime du HitDef → hitstop, comme dans MUGEN
-    if(hd.pauseTime > 0) freeze(Math.min(12, hd.pauseTime));
+    if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
+    blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
     popDamage(def.x, GROUND-120, dmg);
     if(att.combo >= 2) popCombo(att);
@@ -711,7 +714,8 @@
   function koFighter(loser, winner){
     setState(loser,'ko'); loser.vx = 5*(-loser.facing); loser.vy=-6; loser.onGround=false;
     round.state='ko'; round.stateT=0; const wi = winner.side; round.wins[wi]++;
-    banner(loser.side===0?'K.O. !':'K.O. !','ko'); shake(16); playBeep('ko');
+    banner('K.O. !','ko'); shake(16); playBeep('ko');
+    bloodScreen(); blood(loser.x, GROUND-100, 2.4);
   }
   function decideByHp(p,e){
     if(p.hp===e.hp){ round.state='ko'; round.stateT=0; banner('TEMPS !','fight'); return; }
@@ -735,14 +739,47 @@
 
   // ══════════════ FX ══════════════
   function banner(text,tone){ fx.push({kind:'banner',text,tone,t:0,life:tone==='move'?40:70}); }
+  /** Gerbe de gouttes de sang à l'impact — plus lisible qu'un flash plein. */
+  function blood(x, y, power=1){
+    const n = Math.min(14, 4 + Math.round(power*6));
+    for(let i=0;i<n;i++){
+      fx.push({ kind:'blood', x, y,
+        vx:(Math.random()-0.5)*6*power, vy:-(1.5+Math.random()*4)*power,
+        r:1.6+Math.random()*2.6, t:0, life:26+Math.random()*22 });
+    }
+  }
+  /** Voile sanglant sur tout l'écran (K.O.). */
+  function bloodScreen(){ fx.push({ kind:'bloodscreen', t:0, life:110 }); }
   function popCombo(f){ fx.push({kind:'combo',side:f.side,n:f.combo,t:0,life:50}); }
   // Gel cinématique au déclenchement d'un super (hitstop global).
-  function freeze(frames){ freezeT = Math.max(freezeT, frames); }
+  /**
+   * Gel cinématique (hitstop). Plafonné et non cumulable : sur des coups
+   * très répétés, des gels enchaînés donnaient une sensation de lag —
+   * le jeu était en réalité figé plusieurs fois de suite.
+   */
+  function freeze(frames){
+    if(freezeT > 0) return;                 // déjà figé : on n'empile pas
+    freezeT = Math.min(20, Math.max(0, frames));
+  }
+  /** Gel long réservé aux supers, qui doivent rester spectaculaires. */
+  function freezeSuper(frames){ freezeT = Math.min(45, Math.max(freezeT, frames)); }
   function spawnSpark(x,y,type){ fx.push({kind:'spark',x,y,type,t:0,life:14}); if(type==='hit')playBeep('hit'); }
   function eggBoom(x,y){ fx.push({kind:'boom',x,y,t:0,life:26}); playBeep('boom'); }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
   function shake(p){ ChickenArena._shake = Math.max(ChickenArena._shake, p); }
-  function updateFx(){ fx.forEach(o=>o.t++); fx = fx.filter(o=>o.t<o.life); ChickenArena._shake*=0.86; }
+  function updateFx(){
+    for(const o of fx){
+      o.t++;
+      if(o.kind==='blood'){ o.x += o.vx; o.y += o.vy; o.vy += 0.42; o.vx *= 0.99; }
+      if(o.kind==='rain'){ o.x += o.vx; o.y += o.vy; if(o.y > GROUND){ o.y = -10; o.x = Math.random()*VW; } }
+    }
+    // Plafonne les effets : au-delà, les plus anciens sont retirés. Sans
+    // cela, des coups très répétés accumulent des centaines de particules
+    // et la scène se met à ramer.
+    fx = fx.filter(o => o.t < o.life);
+    if(fx.length > 160) fx = fx.slice(-160);
+    ChickenArena._shake *= 0.86;
+  }
 
   // ══════════════ RENDER ══════════════
   function render(){
@@ -768,6 +805,62 @@
     // sol
     ctx.fillStyle=D.ground; ctx.fillRect(0,GROUND,VW,VH-GROUND);
     ctx.strokeStyle='rgba(255,213,74,.25)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,GROUND); ctx.lineTo(VW,GROUND); ctx.stroke();
+    drawWeather(D);
+  }
+
+  /**
+   * Météo de l'arène : nuages, pluie, éclairs ou grand soleil.
+   * Purement décoratif — dessiné derrière les combattants.
+   */
+  let lightning = 0;
+  function drawWeather(D){
+    const w = D.weather;
+    if(!w || w === 'clear') return;
+
+    if(w === 'sun'){
+      const cx = VW*0.82, cy = VH*0.14;
+      const g = ctx.createRadialGradient(cx,cy,4, cx,cy,54);
+      g.addColorStop(0,'rgba(255,241,150,.95)'); g.addColorStop(1,'rgba(255,214,90,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,54,0,7); ctx.fill();
+    }
+    if(w === 'sun' || w === 'cloudy' || w === 'rain' || w === 'storm'){
+      const dark = (w === 'rain' || w === 'storm');
+      ctx.save();
+      ctx.fillStyle = dark ? 'rgba(30,30,45,.72)' : 'rgba(255,255,255,.30)';
+      for(let i=0;i<4;i++){
+        const cx = ((gameFrame*0.16 + i*180) % (VW+180)) - 90;
+        const cy = 26 + (i%2)*22;
+        const s  = dark ? 1.25 : 1;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 46*s, 15*s, 0, 0, 7);
+        ctx.ellipse(cx+30, cy+4, 34*s, 12*s, 0, 0, 7);
+        ctx.ellipse(cx-28, cy+5, 30*s, 11*s, 0, 0, 7);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    if(w === 'rain' || w === 'storm'){
+      // voile sombre
+      ctx.fillStyle = 'rgba(10,12,28,.30)'; ctx.fillRect(0,0,VW,VH);
+      // gouttes : motif déterministe, sans allocation par frame
+      ctx.strokeStyle = 'rgba(175,205,240,.55)'; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for(let i=0;i<70;i++){
+        const seed = i*97;
+        const x = (seed*13 + gameFrame*3.4) % VW;
+        const y = (seed*29 + gameFrame*11) % VH;
+        ctx.moveTo(x, y); ctx.lineTo(x-3, y+13);
+      }
+      ctx.stroke();
+    }
+    if(w === 'storm'){
+      if(lightning > 0) lightning--;
+      else if(Math.random() < 0.006) lightning = 7;
+      if(lightning > 0){
+        ctx.fillStyle = `rgba(235,240,255,${0.16 + (lightning/7)*0.34})`;
+        ctx.fillRect(0,0,VW,VH);
+      }
+    }
   }
 
   function drawFighter(f){
@@ -827,12 +920,18 @@
     const flipY = /v/i.test(frame.flip) ? -1 : 1;
     if(flipX < 0 || flipY < 0) ctx.scale(flipX, flipY);
     ctx.imageSmoothingEnabled = false;
+    // Teinte de dégât : on redessine le sprite en rouge par-dessus lui-même.
+    // (Un fillRect en "source-atop" peindrait un rectangle sur toute la
+    //  scène déjà dessinée — d'où les gros rectangles rouges.)
     ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
-    if(f.flash>0){
-      ctx.globalCompositeOperation='source-atop';
-      ctx.fillStyle='rgba(255,90,90,'+(f.flash/12)+')';
-      ctx.fillRect(-s.x + frame.x, -s.y + frame.y, img.width, img.height);
-      ctx.globalCompositeOperation='source-over';
+    if(f.flash > 0){
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.55, f.flash / 14);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.filter = 'brightness(0) saturate(100%) invert(28%) sepia(90%) saturate(3000%) hue-rotate(350deg)';
+      ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
+      ctx.filter = 'none';
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -853,6 +952,31 @@
         const y = small?VH*0.22:VH*0.42;
         ctx.strokeText(o.text,VW/2,y); ctx.fillText(o.text,VW/2,y); ctx.restore();
       }
+      if(o.kind==='blood'){
+        const k = o.t/o.life;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1-k*k);
+        ctx.fillStyle = k < 0.5 ? '#c1121f' : '#7f1020';
+        ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r*1.35, 0, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+      if(o.kind==='bloodscreen'){
+        const k = o.t/o.life;
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.62, (1-k)*0.9);
+        const g = ctx.createRadialGradient(VW/2,VH/2,VH*0.2, VW/2,VH/2,VH*0.85);
+        g.addColorStop(0,'rgba(120,0,10,0)'); g.addColorStop(1,'rgba(140,0,12,1)');
+        ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+        // coulures depuis le haut
+        ctx.globalAlpha = Math.min(0.75, (1-k));
+        ctx.fillStyle='#8b0011';
+        for(let i=0;i<10;i++){
+          const x = (i*67 + 23) % VW;
+          const h = 26 + ((i*37)%54) + Math.min(70, o.t*1.6);
+          ctx.fillRect(x, 0, 7, h);
+          ctx.beginPath(); ctx.arc(x+3.5, h, 4.5, 0, 7); ctx.fill();
+        }
+        ctx.restore();
+      }
       if(o.kind==='flashscreen'){
         const k=o.t/o.life; ctx.save(); ctx.globalAlpha=(1-k)*0.5;
         ctx.fillStyle=`rgb(${o.rgb[0]||255},${o.rgb[1]||255},${o.rgb[2]||255})`;
@@ -862,29 +986,35 @@
         const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k*k;
         const x = o.side===0? 60 : VW-60;
         ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.lineWidth=4;
-        ctx.font='bold 30px Bangers,Fredoka,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-        const y = VH*0.30 - k*14;
+        ctx.font='bold 26px Bangers,Fredoka,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        const y = VH*0.46 - k*14;
         ctx.strokeText(o.n+' COMBO',x,y); ctx.fillStyle='#ffd54a'; ctx.fillText(o.n+' COMBO',x,y); ctx.restore();
       }
     }
   }
 
   function drawHud(){
-    // barres de vie style arcade en haut
-    bar(20, 18, 250, fighters[0], false);
-    bar(VW-20-250, 18, 250, fighters[1], true);
+    const M = 16, W = 244, TOP = 30;      // marge haute : lisible même rogné
+    // Fond du bandeau : détache le HUD du décor.
+    ctx.fillStyle = 'rgba(8,3,20,.55)';
+    ctx.fillRect(0, 0, VW, TOP + 46);
+
+    bar(M, TOP, W, fighters[0], false);
+    bar(VW-M-W, TOP, W, fighters[1], true);
     // timer
-    ctx.fillStyle='#0d0520cc'; ctx.strokeStyle='rgba(255,213,74,.6)'; ctx.lineWidth=2;
-    ctx.fillRect(VW/2-26,14,52,34); ctx.strokeRect(VW/2-26,14,52,34);
+    ctx.fillStyle='#0d0520ee'; ctx.strokeStyle='rgba(255,213,74,.7)'; ctx.lineWidth=2;
+    ctx.fillRect(VW/2-26,TOP-6,52,36); ctx.strokeRect(VW/2-26,TOP-6,52,36);
     ctx.fillStyle='#ffd54a'; ctx.font='bold 22px Fredoka,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(Math.ceil(round.timer/FPS), VW/2, 33);
+    ctx.fillText(Math.ceil(round.timer/FPS), VW/2, TOP+12);
     // rounds gagnés
     for(let s=0;s<2;s++) for(let i=0;i<round.best;i++){
-      const won = round.wins[s]>i; const x = s===0? 20+i*16 : VW-20-i*16;
-      ctx.fillStyle = won?'#ffd54a':'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.arc(x,52,5,0,7); ctx.fill();
+      const won = round.wins[s]>i; const x = s===0? M+6+i*15 : VW-M-6-i*15;
+      ctx.fillStyle = won?'#ffd54a':'rgba(255,255,255,.22)';
+      ctx.beginPath(); ctx.arc(x, TOP+34, 4.5, 0, 7); ctx.fill();
     }
-    // jauge super
-    meter(20, 60, 250, fighters[0], false); meter(VW-20-250, 60, 250, fighters[1], true);
+    // jauges de super, explicitement étiquetées
+    meter(M, TOP+42, W, fighters[0], false);
+    meter(VW-M-W, TOP+42, W, fighters[1], true);
   }
   function bar(x,y,w,f,right){
     const pct = Math.max(0,f.hp/f.maxHp);
@@ -893,14 +1023,42 @@
     const grad = ctx.createLinearGradient(x,0,x+w,0);
     if(pct>0.3){ grad.addColorStop(0,'#22c55e'); grad.addColorStop(1,'#84cc16'); } else { grad.addColorStop(0,'#f97316'); grad.addColorStop(1,'#ef4444'); }
     ctx.fillStyle=grad; ctx.fillRect(bx,y,bw,16);
-    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,16);
-    ctx.fillStyle='#fff'; ctx.font='11px Fredoka,sans-serif'; ctx.textAlign=right?'right':'left'; ctx.textBaseline='middle';
-    ctx.fillText(f.id.toUpperCase(), right?x+w:x, y-8);
+    ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,16);
+    // Nom + libellé « VIE », pour distinguer clairement des deux jauges.
+    ctx.font='bold 10px Fredoka,sans-serif'; ctx.textAlign=right?'right':'left'; ctx.textBaseline='middle';
+    ctx.fillStyle='#fff';
+    const name = (opts && (right ? opts.enemyName : opts.playerName)) || f.id.toUpperCase();
+    ctx.fillText(`❤ ${name}`, right?x+w:x, y-9);
+    // pourcentage de vie, dans la barre
+    ctx.font='bold 9px Fredoka,sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.fillText(`${Math.max(0,Math.round(pct*100))}%`, x+w/2, y+8);
   }
+  /**
+   * Jauge de SUPER (jauge du bas). Elle se remplit en donnant et en
+   * encaissant des coups ; à 100 % elle clignote « SUPER PRÊT » et permet
+   * de déclencher le coup ultime (bouton ŒUF ou ↓↘→ ↓↘→ + coup).
+   * Elle est étiquetée à l'écran, faute de quoi son rôle reste obscur.
+   */
   function meter(x,y,w,f,right){
-    const pct=f.meter/100, bw=w*pct, bx=right?x+w-bw:x;
-    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(x,y,w,7);
-    ctx.fillStyle = f.meter>=100?'#ffd54a':'#7c3aed'; ctx.fillRect(bx,y,bw,7);
+    const pct = f.meter/100, bw = w*pct, bx = right ? x+w-bw : x;
+    const ready = f.meter >= 100;
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(x,y,w,9);
+    const g = ctx.createLinearGradient(x,0,x+w,0);
+    if(ready){ g.addColorStop(0,'#fbbf24'); g.addColorStop(1,'#fff3c4'); }
+    else { g.addColorStop(0,'#6d28d9'); g.addColorStop(1,'#a855f7'); }
+    ctx.fillStyle = g; ctx.fillRect(bx,y,bw,9);
+    ctx.strokeStyle='rgba(255,255,255,.28)'; ctx.lineWidth=1; ctx.strokeRect(x,y,w,9);
+    // étiquette
+    ctx.font='bold 8px Fredoka,sans-serif'; ctx.textBaseline='middle';
+    ctx.textAlign = right ? 'right' : 'left';
+    const lx = right ? x+w-3 : x+3;
+    if(ready && Math.floor(gameFrame/8) % 2 === 0){
+      ctx.fillStyle='#0d0520'; ctx.fillText('⚡ SUPER PRÊT !', lx, y+4.5);
+    } else {
+      ctx.fillStyle='rgba(255,255,255,.75)';
+      ctx.fillText(`SUPER ${Math.round(f.meter)}%`, lx, y+4.5);
+    }
   }
 
   // ══════════════ SON (léger, WebAudio) ══════════════

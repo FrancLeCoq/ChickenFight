@@ -341,6 +341,7 @@
     $('#flagFr').classList.toggle('active',lang === 'fr');
     $('#flagEn').classList.toggle('active',lang === 'en');
     $('#soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+    $$('.open-lock').forEach(el => el.innerHTML = lockSvg(true));
     renderAccessState();
     renderCampaign(); renderArena(); renderDuel(); renderProfile();
     updateScreenCaption();
@@ -1020,21 +1021,31 @@
 
   // Décors : ambiances de scène passées au moteur.
   const DECORS = {
-    dojo:    { sky:'#3a2568', sky2:'#4a2f7a', ground:'#7a4a22', ground2:'#3d2712' },
-    sunset:  { sky:'#7c2d12', sky2:'#b45309', ground:'#78350f', ground2:'#431407' },
-    ice:     { sky:'#0c4a6e', sky2:'#0369a1', ground:'#94a3b8', ground2:'#334155' },
-    forest:  { sky:'#14532d', sky2:'#166534', ground:'#4d7c0f', ground2:'#1a2e05' },
-    throne:  { sky:'#4c1d95', sky2:'#7c3aed', ground:'#78350f', ground2:'#3b0764' },
-    arena:   { sky:'#1e1b4b', sky2:'#312e81', ground:'#92400e', ground2:'#451a03' }
+    dojo:    { sky:'#3a2568', sky2:'#4a2f7a', ground:'#7a4a22', ground2:'#3d2712', weather:'clear' },
+    sunset:  { sky:'#7c2d12', sky2:'#b45309', ground:'#78350f', ground2:'#431407', weather:'sun' },
+    ice:     { sky:'#0c4a6e', sky2:'#0369a1', ground:'#94a3b8', ground2:'#334155', weather:'cloudy' },
+    forest:  { sky:'#14532d', sky2:'#166534', ground:'#4d7c0f', ground2:'#1a2e05', weather:'rain' },
+    throne:  { sky:'#4c1d95', sky2:'#7c3aed', ground:'#78350f', ground2:'#3b0764', weather:'clear' },
+    arena:   { sky:'#1e1b4b', sky2:'#312e81', ground:'#92400e', ground2:'#451a03', weather:'sun' },
+    storm:   { sky:'#0f172a', sky2:'#1e293b', ground:'#3f3f46', ground2:'#18181b', weather:'storm' },
+    desert:  { sky:'#b45309', sky2:'#fbbf24', ground:'#d97706', ground2:'#78350f', weather:'sun' },
+    night:   { sky:'#020617', sky2:'#1e1b4b', ground:'#312e81', ground2:'#0f172a', weather:'cloudy' },
+    volcano: { sky:'#450a0a', sky2:'#b91c1c', ground:'#7f1d1d', ground2:'#1c0505', weather:'storm' },
+    swamp:   { sky:'#1a2e05', sky2:'#3f6212', ground:'#365314', ground2:'#0f1a02', weather:'rain' }
   };
 
   // Roster du mode Combat : palettes différentes du même personnage.
   const FIGHT_ROSTER = [
-    { id:'kfm',  pal:0,  name:'Kung Fu Man',  desc:'Le maître du dojo',      decor:'dojo',   hp:180, pow:0.95, xp:0,    holder:false },
-    { id:'kfm',  pal:3,  name:'Le Spadassin', desc:'Rapide et imprévisible', decor:'sunset', hp:200, pow:1.05, xp:300,  holder:true },
-    { id:'kfm',  pal:6,  name:'Le Givré',     desc:'Encaisse et contre',     decor:'ice',    hp:230, pow:1.10, xp:800,  holder:true },
-    { id:'kfm',  pal:9,  name:'L’Ombre', desc:'Frappe sans prévenir',   decor:'forest', hp:250, pow:1.20, xp:1500, holder:true },
-    { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',     decor:'throne', hp:280, pow:1.35, xp:3000, holder:true }
+    { id:'kfm',  pal:0,  name:'Kung Fu Man',   desc:'Le maître du dojo',       decor:'dojo',    hp:180, pow:0.95, xp:0,    holder:false },
+    { id:'kfm',  pal:3,  name:'Le Spadassin',  desc:'Rapide et imprévisible',  decor:'sunset',  hp:200, pow:1.05, xp:300,  holder:true, skin:'black' },
+    { id:'kfm',  pal:6,  name:'Le Givré',      desc:'Encaisse et contre',      decor:'ice',     hp:230, pow:1.10, xp:800,  holder:true, skin:'asian' },
+    { id:'kfm',  pal:9,  name:'L’Ombre',       desc:'Frappe sans prévenir',    decor:'night',   hp:250, pow:1.20, xp:1500, holder:true },
+    { id:'kfm',  pal:12, name:'Le Brasier',    desc:'Coups incendiaires',      decor:'volcano', hp:255, pow:1.24, xp:2200, holder:true },
+    { id:'kfm',  pal:4,  name:'Le Marécageux', desc:'Lent mais increvable',    decor:'swamp',   hp:275, pow:1.15, xp:2800, holder:true },
+    { id:'kfm',  pal:7,  name:'Le Nomade',     desc:'Endurance du désert',     decor:'desert',  hp:245, pow:1.22, xp:3400, holder:true },
+    { id:'kfm',  pal:10, name:'L’Orageux',     desc:'Frappe comme la foudre',  decor:'storm',   hp:260, pow:1.30, xp:4200, holder:true },
+    { id:'kfm',  pal:13, name:'Le Sylvain',    desc:'Souple et insaisissable', decor:'forest',  hp:250, pow:1.26, xp:5000, holder:true },
+    { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',       decor:'throne',  hp:290, pow:1.38, xp:6000, holder:true }
   ];
 
   // Roster du mode Combat de Coq : les vrais coqs.
@@ -1125,10 +1136,10 @@
       const e = list[i];
       const cv = $(`canvas[data-portrait="${i}"]`);
       if(!cv || !window.ChickenMugen) continue;
-      const key = `${e.id}#${e.pal ?? 0}`;
+      const key = `${e.id}#${e.pal ?? 0}#${e.skin ?? 'd'}`;
       try{
         rtRosterCache[key] ||= await window.ChickenMugen.loadCharacter(
-          rtDefPath(e.id), e.pal ?? undefined);
+          rtDefPath(e.id), e.pal ?? undefined, e.skin);
         const spr = rtRosterCache[key].sprite(0, 0);
         if(!spr) continue;
         const ctx = cv.getContext('2d');
@@ -1180,6 +1191,8 @@
       canvas: $('#rtCanvas'),
       playerId, enemyId: enemy.id, enemyPal: enemy.pal,
       decor: DECORS[enemy.decor] || DECORS.dojo,
+      enemySkin: enemy.skin,
+      playerName:'COQ FU MAN', enemyName: enemy.name.toUpperCase(),
       playerStats:{ hp:210, power:1, defense:1 },
       enemyStats:{ hp:Math.round(enemy.hp * d.ehpMul), power:enemy.pow * d.epowMul, defense:1, ai:d.ai },
       time:60, best:2,
