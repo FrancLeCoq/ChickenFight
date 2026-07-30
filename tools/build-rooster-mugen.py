@@ -17,7 +17,7 @@ palette de 256 couleurs dont l'index 0 est transparent.
 Usage :  python3 tools/build-rooster-mugen.py
 """
 import os, struct, math
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, 'assets')
@@ -190,13 +190,18 @@ def quantize_all(poses):
 
     out = {}
     for key, (im, axis) in poses.items():
+        # Le format indexé n'a pas de canal alpha : tout pixel semi-transparent
+        # devient soit opaque, soit un trou. On binarise donc l'alpha pour
+        # éviter les trous dans les lunettes et à la jonction du béret.
+        a = im.split()[3].point(lambda v: 255 if v >= 96 else 0)
+        im = im.copy(); im.putalpha(a)
         rgb = Image.new('RGB', im.size, (0,0,0))
         rgb.paste(im, mask=im.split()[3])
         idx = rgb.quantize(palette=ref, dither=Image.NONE)
         px = bytearray(idx.tobytes())
         alpha = im.split()[3].tobytes()
         for i, a in enumerate(alpha):
-            if a < 128: px[i] = 0            # transparent
+            if a < 96: px[i] = 0             # transparent
             elif px[i] == 0: px[i] = 1       # évite un faux transparent
         out[key] = (bytes(px), im.size, axis)
     return out, palette

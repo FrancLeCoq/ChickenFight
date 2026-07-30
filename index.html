@@ -181,11 +181,14 @@
           <button class="rt-dir rt-down" data-dir="down" aria-label="Accroupir">▼</button>
           <button class="rt-dir rt-right" data-dir="right" aria-label="Droite">▶</button>
         </div>
+        <!-- Disposition calquée sur l'anatomie du coq : bec et aile en haut,
+             patte en bas. L'œuf (coup fatal) reste grisé tant que la jauge
+             de super n'est pas pleine. -->
         <div class="rt-buttons" id="rtButtons">
           <button class="rt-atk rt-peck" data-btn="light">🥊<b>BEC</b></button>
-          <button class="rt-atk rt-kick" data-btn="kick">🦵<b>PATTE</b></button>
           <button class="rt-atk rt-wing" data-btn="heavy">🪽<b>AILE</b></button>
-          <button class="rt-atk rt-egg" data-btn="special">🥚<b>ŒUF</b></button>
+          <button class="rt-atk rt-kick" data-btn="kick">🦵<b>PATTE</b></button>
+          <button class="rt-atk rt-egg" id="eggBtn" data-btn="super" disabled>🥚<b>ŒUF</b></button>
         </div>
       </div>
       <p class="rt-hint">Clavier : ◀▶ déplacer · ▲ saut · ▼ garde/bas · J bec · L patte · K aile · Espace œuf (jauge pleine, ou →↓ + œuf)</p>
