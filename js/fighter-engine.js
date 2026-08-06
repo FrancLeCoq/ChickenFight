@@ -38,7 +38,7 @@
     // Coq Fu Man : corps pixel art de KFM + tête de coq dessinée PAR-DESSUS
     // au rendu, en pleine qualité (pas de quantification dans le .sff).
     coqfu:  { mugen:true, def:'chars/coqfu/coqfu.def', scale:1.75,
-              headOverlay:{ img:'assets/francis-head.webp',
+              headOverlay:{ img:'assets/francis-head-fight.webp',
                             anchors:'chars/coqfu/head-anchors.json' } },
     kfm720: { mugen:true, def:'chars/kfm720/kfm720.def', scale:0.44 },
     // Le coq et ses évolutions, convertis au format MUGEN : ils passent
@@ -599,7 +599,17 @@
     f.cns.update(cnsContext(f, opp));
     // Retour en état neutre quand l'attaque est finie et que le contrôle revient.
     if(f.cnsCtrl && f.state === 'attack'){ setState(f, 'idle'); f.move = null; f.hitDef = null; }
+    // Chien de garde : certains états du .cns comptent sur des états communs
+    // du moteur MUGEN pour se terminer. Si l'un d'eux n'aboutit pas, le joueur
+    // se retrouve sans contrôle jusqu'à la fin du round : on le libère.
+    if(f.state === 'attack' && !f.cnsCtrl){
+      if(f.st > CNS_ATTACK_MAX){
+        console.warn('[ChickenArena] état CNS bloqué, contrôle rendu:', f.cns.stateNo);
+        landCns(f);
+      }
+    }
   }
+  const CNS_ATTACK_MAX = 150;   // 2,5 s : bien au-delà du plus long coup
 
   /** Déclenche l'attaque CNS correspondant à un coup du moteur. */
   function startCnsAttack(f, moveName){
@@ -650,8 +660,26 @@
 
   function physics(f){
     f.x += f.vx; f.y += f.vy;
-    if(!f.onGround){ f.vy += GRAVITY; if(f.y>=GROUND){ f.y=GROUND; f.vy=0; f.onGround=true; if(f.state==='fall'||f.state==='jump') setState(f,'idle'); } }
+    if(!f.onGround){
+      f.vy += GRAVITY;
+      if(f.y>=GROUND){
+        f.y=GROUND; f.vy=0; f.onGround=true;
+        if(f.state==='fall'||f.state==='jump') setState(f,'idle');
+        // Un état aérien du .cns (coup de pied sauté…) ne se termine jamais
+        // tout seul : dans MUGEN c'est le moteur qui bascule sur l'état
+        // commun 52 à l'atterrissage. Sans ça, le personnage reste bloqué.
+        else if(f.state==='attack' && f.cns && f.cnsStateType==='A') landCns(f);
+      }
+    }
     f.x = Math.max(WALL, Math.min(VW-WALL, f.x));
+  }
+
+  /** Atterrissage d'un état aérien piloté par le CNS : on rend la main. */
+  function landCns(f){
+    f.cns?.changeState(0);           // au cas où le perso définisse l'état 0
+    f.cnsCtrl = true; f.cnsStateType = 'S'; f.cnsMoveType = 'I';
+    f.hitDef = null; f.hitDefUsed = false; f.move = null;
+    setState(f, 'idle');
   }
 
   /**
@@ -679,11 +707,17 @@
     // sinon le joueur est plaqué au mur par le groupe et ne touche plus rien.
     const margin = street ? 1.05 : 2.15;
     const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * margin;
-    if(Math.abs(dx) < min){
-      const overlap = (min - Math.abs(dx))/2, dir = dx>=0?1:-1;
-      a.x -= overlap*dir; b.x += overlap*dir;
-      a.x = Math.max(WALL, Math.min(VW-WALL,a.x)); b.x = Math.max(WALL, Math.min(VW-WALL,b.x));
-    }
+    if(Math.abs(dx) >= min) return;
+    const push = min - Math.abs(dx), dir = dx>=0?1:-1;
+    // Dans La Street on affronte une meute : si le joueur cédait au poussage,
+    // le groupe le plaquerait contre le mur. C'est donc l'ennemi qui recule.
+    let wa = 0.5, wb = 0.5;
+    if(street && a === fighters[0]){ wa = 0; wb = 1; }
+    else if(street && b === fighters[0]){ wa = 1; wb = 0; }
+    a.x -= push * dir * wa;
+    b.x += push * dir * wb;
+    a.x = Math.max(WALL, Math.min(VW-WALL, a.x));
+    b.x = Math.max(WALL, Math.min(VW-WALL, b.x));
   }
 
   // ── boîtes ──
@@ -759,6 +793,13 @@
     if(round.state!=='fight' || e.state==='ko' || e.state==='hitstun' || e.state==='attack') return out;
     e.aiT--;
     const dist = Math.abs(p.x - e.x), toward = p.x>e.x?'right':'left', away = p.x>e.x?'left':'right';
+    // La Street : la meute ne frappe pas toute en même temps, sinon le joueur
+    // est bloqué en encaissement permanent. Les autres tournent autour.
+    if(e.noAttack){
+      if(dist > 150) out[toward] = true;
+      else if(dist < 90) out[away] = true;
+      return out;
+    }
     const lvl = e.aiLevel; // 0..1 agressivité/skill
     // bloque parfois si l'adversaire attaque proche
     if(p.state==='attack' && dist<90 && Math.random()<0.25+0.4*lvl){ out[away]=true; return out; }
@@ -803,7 +844,7 @@
     list.forEach((e, i) => {
       if(!e.char) return;
       mugenLive[e.id] = e.char;
-      const f = makeFighter(e.id, 1, { hp:e.hp, power:e.power, defense:1, ai:e.ai });
+      const f = makeFighter(e.id, 1, { hp:e.hp, power:e.power, defense:e.defense ?? 1, ai:e.ai });
       f.mugen = e.char;
       f.anim = new window.ChickenMugen.Animator(e.char);
       // entrent par la droite, échelonnés
@@ -815,11 +856,15 @@
     round.state = 'fight';
   }
 
-  /** Un adversaire tombe : il reste au sol dans une mare de sang. */
+  /** Un adversaire tombe : il s'efface en clignotant, la mare de sang reste. */
   function streetKill(f){
     const S = window.ChickenStreet;
+    const lie = S.liesDown(f.id);
+    // Les Kung Fu ont une vraie animation « au sol » (bras le long du corps) :
+    // bien plus propre que de faire pivoter le sprite debout.
+    if(lie) f.anim?.play(window.ChickenMugen.ANIM.down ?? 5110, true);
     street.corpses.push({ x:f.x, facing:f.facing, id:f.id,
-      anim:f.anim, pool:0, t:0 });
+      anim:f.anim, lie, pool:0, t:0 });
     blood(f.x, GROUND - 60, 3);
     street.killed++;
     const drop = S.rollDrop();
@@ -872,20 +917,50 @@
     return true;
   }
 
+  /**
+   * Le joueur avance et c'est la rue qui défile.
+   * Passé le milieu de l'écran on le retient et on décale tout le reste :
+   * décor, ennemis, corps et objets gardent ainsi leurs positions relatives.
+   */
+  function scrollStreet(p){
+    const edge = VW * 0.46;
+    const d = p.x - edge;
+    if(d <= 0) return;
+    p.x = edge;
+    street.scroll += d;
+    for(const f of fighters) if(f !== p) f.x -= d;
+    for(const c of street.corpses) c.x -= d;
+    for(const it of street.pickups) it.x -= d;
+    for(const pr of projectiles) pr.x -= d;
+    // ce qui est sorti loin derrière ne reviendra pas
+    street.corpses = street.corpses.filter(c => c.x > -80);
+    street.pickups = street.pickups.filter(i => i.x > -40);
+  }
+
   /** Boucle propre au mode Street. */
   function stepStreet(){
     const p = fighters[0];
     if(street.banner > 0) street.banner--;
     if(p.wCool > 0) p.wCool--;
 
+    // Sortie d'encaissement : court répit d'invincibilité. Sans lui, une meute
+    // enchaîne les coups et le joueur ne reprend jamais la main.
+    if(p.state === 'hitstun') p.wasHit = true;
+    else if(p.wasHit){ p.wasHit = false; p.invuln = Math.max(p.invuln, 26); }
+
     const pin = readInput();
     // la touche du coup fatal sert aussi à tirer quand une arme est en main
     if(pin.super && p.weapon){ streetFire(p); pin.super = false; }
     updateFighter(p, pin, nearest(p) || p);
     updateCns(p, nearest(p) || p);
+    scrollStreet(p);
     streetPickups(p);
 
-    for(const e of fighters.slice(1)){
+    // jeton d'attaque : au plus deux assaillants à la fois (règle classique
+    // du beat'em up), les autres se contentent d'approcher
+    const gang = fighters.slice(1).sort((a,b) => Math.abs(a.x-p.x) - Math.abs(b.x-p.x));
+    gang.forEach((e, i) => { e.noAttack = i >= 2; });
+    for(const e of gang){
       const target = p;
       updateFighter(e, aiInput(e, target), target);
       updateCns(e, target);
@@ -906,7 +981,10 @@
     }
     if(round.state === 'wavedone'){
       round.stateT++;
+      // startWave est asynchrone (chargement des personnages) : sans ce
+      // verrou, la condition repasse à chaque frame et les vagues défilent.
       if(round.stateT > 70){
+        round.state = 'waveload';
         street.wave++;
         street.corpses = street.corpses.slice(-6);   // on garde les plus récents
         startWave();
@@ -1026,7 +1104,14 @@
     // ombres
     fighters.forEach(f=>{ ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, GROUND+4, 40, 9, 0,0,7); ctx.fill(); });
     // combattants (le plus en arrière derrière)
-    [...fighters].sort((a,b)=>a.y-b.y).forEach(drawFighter);
+    const order = [...fighters].sort((a,b)=>a.y-b.y);
+    order.forEach(f => {
+      drawTrail(f);        // sillage : le coup se « voit » même sur peu d'images
+      drawFighter(f);
+    });
+    // Les arcs de coup passent APRÈS tout le monde : sinon le combattant
+    // dessiné ensuite recouvre l'arc de son adversaire et le coup ne se voit pas.
+    order.forEach(drawSwipe);
     projectiles.forEach(drawEgg);
     drawFx();
     drawHud();
@@ -1116,14 +1201,18 @@
       ctx.fillStyle='rgba(180,190,215,.55)';
       ctx.beginPath(); ctx.arc(mx-6,my-4,4,0,7); ctx.arc(mx+5,my+5,3,0,7); ctx.fill();
     }
-    drawCity();
+    const sc = street?.scroll || 0;
+    drawCity(sc);
+    drawParkedCars(sc);
     // trottoir
     ctx.fillStyle='#111827'; ctx.fillRect(0, GROUND-10, VW, 10);
     ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1;
-    for(let x=0;x<VW;x+=48){ ctx.beginPath(); ctx.moveTo(x,GROUND-10); ctx.lineTo(x,GROUND); ctx.stroke(); }
+    for(let x = -(sc % 48); x < VW; x += 48){
+      ctx.beginPath(); ctx.moveTo(x,GROUND-10); ctx.lineTo(x,GROUND); ctx.stroke();
+    }
     // lampadaires : halo chaud projeté sur la chaussée
-    for(let i=0;i<4;i++){
-      const lx = 70 + i*160 - ((gameFrame*0.12) % 160);
+    for(let i=0;i<5;i++){
+      const lx = 70 + i*160 - (sc % 160);
       ctx.strokeStyle='#334155'; ctx.lineWidth=4;
       ctx.beginPath(); ctx.moveTo(lx, GROUND); ctx.lineTo(lx, GROUND-118); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(lx, GROUND-118); ctx.lineTo(lx+22, GROUND-126); ctx.stroke();
@@ -1142,25 +1231,27 @@
   function drawStreetProps(){
     if(!street) return;
     for(const c of street.corpses){
-      // mare de sang qui s'élargit
+      // mare de sang qui s'élargit puis reste sur le bitume
       ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#6b0f18';
       ctx.beginPath(); ctx.ellipse(c.x, GROUND+2, c.pool, c.pool*0.28, 0, 0, 7); ctx.fill();
       ctx.globalAlpha=.5; ctx.fillStyle='#8f1420';
       ctx.beginPath(); ctx.ellipse(c.x-6, GROUND+1, c.pool*0.6, c.pool*0.18, 0, 0, 7); ctx.fill();
       ctx.restore();
-      // corps allongé : sprite couché
+      // le corps, lui, clignote et s'estompe jusqu'à disparaître
+      const a = window.ChickenStreet.corpseAlpha(c.t);
+      if(a <= 0) continue;
       const fr = c.anim && c.anim.current();
-      if(fr){
-        const sp = fr.sprite;
-        ctx.save();
-        ctx.translate(c.x, GROUND);
-        ctx.scale(c.facing*1.75, 1.75);
-        ctx.rotate(-Math.PI/2 * 0.92);           // allongé au sol
-        ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = .95;
-        ctx.drawImage(sp.canvas, -sp.x + fr.x, -sp.y + fr.y);
-        ctx.restore();
-      }
+      if(!fr) continue;
+      const sp = fr.sprite;
+      const sc = (RENDER[c.id]?.scale) || 1.75;
+      ctx.save();
+      ctx.translate(c.x, GROUND);
+      ctx.scale(c.facing*sc, sc);
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = a;
+      // les coqs n'ont pas de pose couchée présentable : ils s'effacent debout
+      ctx.drawImage(sp.canvas, -sp.x + fr.x, -sp.y + fr.y);
+      ctx.restore();
     }
     for(const it of street.pickups){
       it.bob = Math.sin(gameFrame*0.09 + it.x)*4;
@@ -1175,20 +1266,153 @@
     }
   }
 
-  /** Silhouettes d'immeubles pour le décor urbain. */
-  function drawCity(){
-    ctx.fillStyle = 'rgba(12,18,34,.92)';
-    const heights = [70,110,52,132,88,118,64,100,76,124,58];
-    let x = -10;
-    for(let i=0;i<heights.length;i++){
-      const w = 46 + (i%3)*18, h = heights[i];
+  /**
+   * Skyline urbaine, en deux plans qui défilent à des vitesses différentes :
+   * de grandes tours au loin, des immeubles plus bas devant.
+   */
+  function drawCity(scroll = 0){
+    // plan lointain : les tours, hautes mais sous la lune, à peine éclairées
+    cityLayer(scroll * 0.18, [186,232,158,214,244,170,222,148], 74, 22,
+              'rgba(9,13,26,.95)', 'rgba(255,214,120,.16)', 1);
+    // plan proche : immeubles bas, fenêtres plus vives
+    cityLayer(scroll * 0.42, [70,110,52,132,88,118,64,100,76,124,58], 46, 18,
+              'rgba(12,18,34,.94)', 'rgba(255,214,120,.5)', 2);
+  }
+
+  /** Une rangée d'immeubles répétée à l'infini, décalée de `off`. */
+  function cityLayer(off, heights, baseW, wStep, wall, light, seed){
+    const widths = heights.map((_, i) => baseW + (i % 3) * wStep + 8);
+    const span = widths.reduce((s, w) => s + w, 0);
+    let x = -((off % span) + span) % span;
+    for(let n = 0; x < VW && n < 60; n++){
+      const i = n % heights.length, w = widths[i] - 8, h = heights[i];
+      ctx.fillStyle = wall;
       ctx.fillRect(x, GROUND-h, w, h);
-      ctx.fillStyle = 'rgba(255,214,120,.5)';
-      for(let wy = GROUND-h+10; wy < GROUND-14; wy += 16)
-        for(let wx = x+7; wx < x+w-8; wx += 14)
-          if(((wx*7+wy*3+i) % 5) < 2) ctx.fillRect(wx, wy, 5, 7);
-      ctx.fillStyle = 'rgba(12,18,34,.92)';
-      x += w + 8;
+      ctx.fillStyle = light;
+      for(let wy = GROUND-h+12; wy < GROUND-14; wy += 20)
+        for(let wx = x+8; wx < x+w-8; wx += 16)
+          if(((Math.round(wx)*7 + wy*3 + i*seed) % 7) < 2) ctx.fillRect(wx, wy, 4, 6);
+      x += widths[i];
+    }
+  }
+
+  // Voitures garées le long du trottoir : couleur et longueur fixées par leur
+  // position, pour qu'elles restent identiques quand on repasse devant.
+  const CAR_COLORS = ['#7f1d1d','#1e3a8a','#134e4a','#3f3f46','#78350f','#4c1d95'];
+  function drawParkedCars(scroll = 0){
+    const SPAN = 210;
+    let x = -((scroll % SPAN) + SPAN) % SPAN;
+    let n = Math.floor(scroll / SPAN);
+    for(; x < VW + 60; x += SPAN, n++){
+      const seed = ((n % 6) + 6) % 6;
+      const w = 96 + seed * 6, h = 24;
+      const y = GROUND - 16;               // garées derrière le trottoir
+      ctx.save();
+      // carrosserie
+      ctx.fillStyle = CAR_COLORS[seed];
+      ctx.fillRect(x, y - h, w, h);
+      ctx.fillRect(x + w*0.22, y - h - 15, w*0.52, 16);   // habitacle
+      // vitres, reflet froid de la nuit
+      ctx.fillStyle = 'rgba(148,178,220,.32)';
+      ctx.fillRect(x + w*0.25, y - h - 11, w*0.21, 9);
+      ctx.fillRect(x + w*0.52, y - h - 11, w*0.21, 9);
+      // feux
+      ctx.fillStyle = 'rgba(255,196,120,.85)';
+      ctx.fillRect(x + w - 5, y - h + 6, 5, 5);
+      ctx.fillStyle = 'rgba(220,60,60,.85)';
+      ctx.fillRect(x, y - h + 6, 4, 5);
+      // roues
+      ctx.fillStyle = '#0b0f18';
+      ctx.beginPath();
+      ctx.arc(x + w*0.24, y, 8, 0, 7);
+      ctx.arc(x + w*0.78, y, 8, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Lisibilité des coups ───────────────────────────────────────
+  // Les coqs n'ont que deux ou trois images par attaque : sans effet, tout
+  // ressemble à un coup de bec. On ajoute donc un sillage et un arc de coup,
+  // dessinés par le moteur — indépendants du nombre d'images du personnage.
+  //   a0/a1 : angles de départ et d'arrivée (radians, 0 = devant, négatif = haut)
+  //   r     : rayon de l'arc            y : hauteur du centre au-dessus du sol
+  const SWIPES = {
+    wing:      { a0:-1.5, a1:0.7,  r:74, y:-96, color:'255,246,214', width:15, plume:true },
+    kick:      { a0:-0.5, a1:0.9,  r:66, y:-66, color:'255,214,150', width:11 },
+    heavy:     { a0:-1.3, a1:0.6,  r:78, y:-92, color:'255,236,190', width:16, plume:true },
+    dp:        { a0:0.9,  a1:-1.5, r:70, y:-84, color:'255,226,140', width:14 },
+    uppercut:  { a0:0.9,  a1:-1.5, r:70, y:-84, color:'255,226,140', width:14 },
+    qcb:       { a0:-0.9, a1:1.0,  r:72, y:-74, color:'190,226,255', width:13 },
+    pirouette: { a0:-0.2, a1:2.4,  r:64, y:-52, color:'255,208,160', width:12, plume:true },
+    jumpkick:  { a0:-1.1, a1:0.5,  r:72, y:-74, color:'214,236,255', width:13 },
+    super:     { a0:-1.6, a1:1.2,  r:92, y:-98, color:'255,208,120', width:20, plume:true }
+  };
+
+  /** Avancement dans la phase visible d'un coup, ou null hors de cette phase. */
+  function swipePhase(f){
+    if(f.state !== 'attack' || !f.move) return null;
+    const m = f.move;
+    const dur = (m.active || 3) + 4;
+    const t = f.st - (m.startup || 0) + 1;
+    if(t < 0 || t > dur) return null;
+    return Math.max(0, Math.min(1, t / dur));
+  }
+
+  /** Arc lumineux qui suit la trajectoire du coup. */
+  function drawSwipe(f){
+    const cfg = SWIPES[f.move?.name];
+    const p = cfg ? swipePhase(f) : null;
+    if(p == null) return;
+    const a = cfg.a0 + (cfg.a1 - cfg.a0) * p;
+    const span = 0.85 * (1 - p * 0.35);          // la traîne se resserre
+    const fade = Math.sin(Math.min(1, p * 1.15) * Math.PI);
+    ctx.save();
+    ctx.translate(f.x, GROUND + cfg.y);
+    ctx.scale(f.facing, 1);
+    ctx.lineCap = 'round';
+    // trois passes : halo large, corps de l'arc, cœur clair — le coup doit se
+    // lire d'un coup d'œil sur un écran de téléphone
+    const pass = [[2.1, 0.20], [1, 0.60], [0.34, 0.85]];
+    for(const [k, alpha] of pass){
+      ctx.strokeStyle = `rgba(${cfg.color},${alpha * fade})`;
+      ctx.lineWidth = cfg.width * k;
+      ctx.beginPath();
+      ctx.arc(0, 0, cfg.r, a - span, a, false);
+      ctx.stroke();
+    }
+    // plumes emportées par le mouvement d'aile
+    if(cfg.plume && fade > 0.3){
+      ctx.fillStyle = `rgba(255,248,232,${0.5 * fade})`;
+      for(let i = 0; i < 3; i++){
+        const pa = a - span * (0.2 + i * 0.3);
+        const pr = cfg.r + 6 + i * 5;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(pa) * pr, Math.sin(pa) * pr, 4.5, 2, pa, 0, 7);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** Sillage : deux copies fantômes du sprite, décalées vers l'arrière. */
+  function drawTrail(f){
+    const p = swipePhase(f);
+    if(p == null || p > 0.85) return;
+    const frame = f.anim && f.anim.current();
+    if(!frame) return;                 // sillage réservé aux personnages MUGEN
+    const sc = f.r.scale || 1.5, s = frame.sprite;
+    const box = headBoxOf(f, frame);
+    const img = box ? beheaded(s.canvas, box) : s.canvas;
+    for(let i = 1; i <= 2; i++){
+      ctx.save();
+      ctx.globalAlpha = 0.15 / i * (1 - p);
+      ctx.translate(f.x - f.facing * (10 * i) * (1 - p), GROUND);
+      ctx.scale(f.facing * sc, sc);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
+      if(box) drawHeadOverlay(f, frame, s, box);   // le fantôme garde sa tête
+      ctx.restore();
     }
   }
 
@@ -1252,13 +1476,15 @@
     // Teinte de dégât : on redessine le sprite en rouge par-dessus lui-même.
     // (Un fillRect en "source-atop" peindrait un rectangle sur toute la
     //  scène déjà dessinée — d'où les gros rectangles rouges.)
-    ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
-    drawHeadOverlay(f, frame, s);
+    const box = headBoxOf(f, frame);
+    const body = box ? beheaded(img, box) : img;
+    ctx.drawImage(body, -s.x + frame.x, -s.y + frame.y);
+    if(box) drawHeadOverlay(f, frame, s, box);
     if(f.flash > 0){
       // La teinte est composée dans un canvas hors écran : appliquée
       // directement sur la scène, 'source-atop' peindrait un rectangle sur
       // tout le décor déjà dessiné, et ctx.filter efface le sprite.
-      const tint = tintSprite(img, '#e01020');
+      const tint = tintSprite(body, '#e01020');
       if(tint){
         ctx.save();
         ctx.globalAlpha = Math.min(0.5, f.flash / 14);
@@ -1269,23 +1495,61 @@
     ctx.restore();
   }
 
-  /**
-   * Pose l'illustration de la tête de coq sur le corps.
-   * Elle est statique : elle suit simplement le sprite, à la position
-   * calculée hors ligne pour chaque image (voir tools/build-head-anchors.py).
-   */
-  function drawHeadOverlay(f, frame, s){
+  /** Boîte de la tête d'origine pour l'image courante, si le perso en a une. */
+  function headBoxOf(f, frame){
     const ov = f.r.headOverlay;
-    if(!ov) return;
+    if(!ov) return null;
     const im = images[ov.img];
-    if(!im || !im.complete || !im.naturalWidth) return;
-    const a = headAnchors[f.id]?.[`${frame.groupKey}`];
-    if(!a) return;
-    const w = a.w, h = w * im.naturalHeight / im.naturalWidth;
-    // coordonnées relatives à l'axe du sprite, comme le corps
+    if(!im || !im.complete || !im.naturalWidth) return null;
+    return headAnchors[f.id]?.[frame.groupKey] || null;
+  }
+
+  // Couleurs de la tête de Kung Fu Man (indices 21-31 de sa palette).
+  // Dans la boîte de la tête, on les efface : sinon son crâne dépasse de
+  // l'illustration et on voit deux têtes superposées.
+  const HEAD_RGB = new Set([
+    [247,247,247],[165,181,222],[128,148,196],[66,99,165],[212,131,99],
+    [239,189,156],[231,148,115],[189,115,90],[132,66,49],[90,90,99],[49,49,49]
+  ].map(c => (c[0]<<16) | (c[1]<<8) | c[2]));
+
+  // Un canvas décapité par sprite, calculé une fois puis réutilisé.
+  const beheadedCache = new WeakMap();
+  function beheaded(img, box){
+    let c = beheadedCache.get(img);
+    if(c) return c;
+    const w = img.width, h = img.height;
+    if(!w || !h) return img;
+    c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently:true });
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, 0, 0);
+    const x0 = Math.max(0, box.x), y0 = Math.max(0, box.y);
+    const x1 = Math.min(w, box.x + box.w), y1 = Math.min(h, box.y + box.h);
+    if(x1 > x0 && y1 > y0){
+      const d = g.getImageData(x0, y0, x1 - x0, y1 - y0);
+      const p = d.data;
+      for(let i = 0; i < p.length; i += 4){
+        if(!p[i+3]) continue;
+        if(HEAD_RGB.has((p[i]<<16) | (p[i+1]<<8) | p[i+2])) p[i+3] = 0;
+      }
+      g.putImageData(d, x0, y0);
+    }
+    beheadedCache.set(img, c);
+    return c;
+  }
+
+  /**
+   * Pose l'illustration de la tête de coq à la place de celle d'origine.
+   * Elle est statique : elle suit simplement le sprite, sur la boîte calculée
+   * hors ligne pour chaque image (voir tools/build-head-anchors.py).
+   */
+  function drawHeadOverlay(f, frame, s, box){
+    const im = images[f.r.headOverlay.img];
+    // La boîte dessinée est exactement celle qu'on vient d'effacer : rien de
+    // l'ancienne tête ne peut donc rester visible autour de l'illustration.
     ctx.save();
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(im, -s.x + frame.x + a.x, -s.y + frame.y + a.y, w, h);
+    ctx.drawImage(im, -s.x + frame.x + box.x, -s.y + frame.y + box.y, box.w, box.h);
     ctx.restore();
   }
 
@@ -1564,7 +1828,7 @@
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       street = o.mode === 'street' ? {
         wave:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
-        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0
+        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0, scroll:0
       } : null;
       if(street) await startWave();
       running=true; last=0; acc=0;
@@ -1589,12 +1853,19 @@
       freezeAi(v){ fighters.forEach(f => f.aiFrozen = !!v); },
       place(i, x){ if(fighters[i]) fighters[i].x = x; },
       attack(i, move){ if(fighters[i]) startAttack(fighters[i], move); },
+      kill(){ fighters.slice(1).forEach(f => { f.hp = 0; }); },
       boxes(i, kind){ return fighters[i] ? clsnBoxes(fighters[i], kind) : null; }
     },
     /** État interne, pour le diagnostic et les tests. */
+    /** Avancée du joueur dans la rue (mode Street), en unités monde. */
+    streetInfo(){
+      return street ? { scroll:Math.round(street.scroll), wave:street.wave,
+        lives:street.lives, killed:street.killed, corpses:street.corpses.length } : null;
+    },
     debug(){
       return fighters.map(f => ({
         id:f.id, hp:Math.round(f.hp), maxHp:f.maxHp, state:f.state,
+        move:f.move?.name ?? null, st:f.st, anim:f.anim?.no ?? null,
         cnsState:f.cns?.stateNo ?? null, hasCns:!!f.cns,
         hitDef:!!f.hitDef, meter:Math.round(f.meter), x:Math.round(f.x)
       }));

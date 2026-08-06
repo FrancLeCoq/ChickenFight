@@ -51,7 +51,7 @@ def load_parts(spec):
     return parts
 
 def compose(parts, head_rot=0.0, head_dx=0, head_dy=0, tail_rot=0.0,
-            body_rot=0.0, body_dx=0, body_dy=0, squash=1.0):
+            body_rot=0.0, body_dx=0, body_dy=0, squash=1.0, stretch=1.0):
     """Compose une pose : queue derrière, corps, tête articulée."""
     src_w, src_h = parts['body'].size
     layer = Image.new('RGBA', (src_w, src_h), (0,0,0,0))
@@ -73,7 +73,9 @@ def compose(parts, head_rot=0.0, head_dx=0, head_dy=0, tail_rot=0.0,
         layer = layer.rotate(math.degrees(body_rot), resample=Image.BICUBIC,
                              center=(src_w*0.5, src_h*0.92))
 
-    w = int(src_w*SCALE); h = int(src_h*SCALE*squash)
+    # `stretch` élargit la silhouette : c'est ce qui distingue un coup d'aile
+    # (le coq s'ouvre en largeur) d'un simple coup de bec (il se projette).
+    w = int(src_w*SCALE*stretch); h = int(src_h*SCALE*squash)
     layer = layer.resize((w, h), Image.LANCZOS)
 
     out = Image.new('RGBA', CANVAS, (0,0,0,0))
@@ -109,17 +111,24 @@ def build_poses(parts, rigged=True):
     P[(43,0)] = compose(parts, body_rot=0.08, squash=0.97, tail_rot=0.22, head_rot=0.10)
     # 130 — garde
     P[(130,0)] = compose(parts, body_rot=0.10, squash=0.94, head_rot=0.16, tail_rot=-0.16)
-    # 200 — coup de bec (poing léger)
-    P[(200,0)] = compose(parts, head_rot=-0.16, head_dx=10)
-    P[(200,1)] = compose(parts, head_rot=-0.52, head_dx=44, head_dy=10, body_dx=8)
+    # Les trois attaques doivent se reconnaître à la SILHOUETTE, pas seulement
+    # à la distance parcourue — sinon tout ressemble à un coup de bec.
+    # 200 — coup de bec : seule la tête part loin devant, le corps bouge peu
+    P[(200,0)] = compose(parts, head_rot=-0.16, head_dx=10, body_dx=-4)
+    P[(200,1)] = compose(parts, head_rot=-0.60, head_dx=52, head_dy=12, body_dx=10)
     P[(200,2)] = compose(parts, head_rot=-0.30, head_dx=24, body_dx=4)
-    # 210 — coup d'aile (poing fort)
-    P[(210,0)] = compose(parts, body_rot=-0.12, tail_rot=-0.30, head_rot=-0.10)
-    P[(210,1)] = compose(parts, body_rot=0.20, body_dx=16, tail_rot=0.34, head_rot=-0.34, squash=1.04)
-    P[(210,2)] = compose(parts, body_rot=0.08, body_dx=6, tail_rot=0.14)
-    # 230 — coup de patte
-    P[(230,0)] = compose(parts, body_rot=-0.08, squash=0.95)
-    P[(230,1)] = compose(parts, body_rot=0.16, body_dx=18, body_dy=-8, squash=1.02, tail_rot=0.26)
+    # 210 — coup d'aile : le coq s'ouvre en largeur et s'écrase, puis balaie
+    P[(210,0)] = compose(parts, body_rot=-0.26, body_dx=-12, tail_rot=-0.42,
+                         head_rot=-0.10, stretch=0.88, squash=1.05)
+    P[(210,1)] = compose(parts, body_rot=0.30, body_dx=26, tail_rot=0.46,
+                         head_rot=-0.36, stretch=1.32, squash=0.86)
+    P[(210,2)] = compose(parts, body_rot=0.12, body_dx=10, tail_rot=0.18,
+                         stretch=1.12, squash=0.95)
+    # 230 — coup de patte : détente vers le bas puis extension haute et étirée
+    P[(230,0)] = compose(parts, body_rot=-0.06, squash=0.84, stretch=1.08, body_dy=6)
+    P[(230,1)] = compose(parts, body_rot=0.24, body_dx=30, body_dy=-18,
+                         squash=1.18, stretch=0.90, tail_rot=0.34)
+    P[(230,2)] = compose(parts, body_rot=0.10, body_dx=12, body_dy=-6, squash=1.05)
     # 5000 — touché
     P[(5000,0)] = compose(parts, body_rot=0.22, body_dx=-12, head_rot=0.36, tail_rot=0.30)
     # 5110 — au sol (K.O.)
@@ -141,15 +150,18 @@ def build_poses_simple(parts):
     P[(41,0)] = compose(parts, body_rot=-0.12, squash=1.06)
     P[(43,0)] = compose(parts, body_rot=0.10, squash=0.96)
     P[(130,0)] = compose(parts, body_rot=0.12, squash=0.93)
-    # attaques : projection du corps vers l'avant
-    P[(200,0)] = compose(parts, body_dx=6, body_rot=-0.06)
-    P[(200,1)] = compose(parts, body_dx=30, body_rot=0.18, squash=1.03)
-    P[(200,2)] = compose(parts, body_dx=14, body_rot=0.08)
-    P[(210,0)] = compose(parts, body_rot=-0.16, body_dx=-6)
-    P[(210,1)] = compose(parts, body_rot=0.26, body_dx=34, squash=1.05)
-    P[(210,2)] = compose(parts, body_rot=0.10, body_dx=12)
-    P[(230,0)] = compose(parts, body_rot=-0.08, squash=0.95)
-    P[(230,1)] = compose(parts, body_rot=0.20, body_dx=32, body_dy=-10, squash=1.02)
+    # Attaques : sans rig, c'est la déformation qui doit rendre chaque coup
+    # reconnaissable — projection pour le bec, largeur pour l'aile, hauteur
+    # pour la patte. Sinon les trois se ressemblent.
+    P[(200,0)] = compose(parts, body_dx=4, body_rot=-0.05, squash=0.99)
+    P[(200,1)] = compose(parts, body_dx=34, body_rot=0.16, stretch=1.10, squash=0.97)
+    P[(200,2)] = compose(parts, body_dx=14, body_rot=0.07)
+    P[(210,0)] = compose(parts, body_rot=-0.28, body_dx=-12, stretch=0.86, squash=1.06)
+    P[(210,1)] = compose(parts, body_rot=0.32, body_dx=30, stretch=1.36, squash=0.84)
+    P[(210,2)] = compose(parts, body_rot=0.12, body_dx=12, stretch=1.14, squash=0.94)
+    P[(230,0)] = compose(parts, body_rot=-0.06, squash=0.82, stretch=1.10, body_dy=6)
+    P[(230,1)] = compose(parts, body_rot=0.26, body_dx=32, body_dy=-20, squash=1.20, stretch=0.88)
+    P[(230,2)] = compose(parts, body_rot=0.10, body_dx=14, body_dy=-6, squash=1.06)
     P[(5000,0)] = compose(parts, body_rot=0.26, body_dx=-16)
     P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9)
     return P
@@ -311,6 +323,7 @@ AIR = """; Francis Le Coq — animations (numéros standard MUGEN)
 [Begin Action 230]    ; coup de patte
 230,0, 0,0, 4
 230,1, 0,0, 6
+230,2, 0,0, 5
 
 [Begin Action 5000]   ; touché
 5000,0, 0,0, -1
