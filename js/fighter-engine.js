@@ -402,7 +402,7 @@
     const scaleHp = def.maxHp / 1000;               // 23 dégâts MUGEN → ~4 chez nous
     if(blocking){
       def.hp -= Math.max(0, Math.round(hd.guardDamage * scaleHp));
-      def.vx = 0.5 * Math.abs(hd.groundVelX) * (-def.facing);
+      def.vx = 1.1 * Math.abs(hd.groundVelX) * (-def.facing);
       def.stun = hd.guardHitTime || 8;
       setState(def, 'hitstun'); att.combo = 0; att.moveGuarded = 1;
       shake(4); return;
@@ -417,7 +417,7 @@
 
     def.hp -= dmg; def.flash = 6;
     if(def.onGround){
-      def.vx = (hd.groundVelX/2) * (-def.facing);
+      def.vx = (hd.groundVelX * 1.35) * (-def.facing);   // recul plus net
       def.stun = hd.hitTime || 12;
       if(hd.fall || hd.groundType === 'Trip'){ def.vy = hd.airVelY || -6; def.onGround = false; }
     } else {
@@ -430,6 +430,7 @@
     att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
     def.meter = clampN(def.meter + 3, 0, 100);
     // pausetime du HitDef → hitstop, comme dans MUGEN
+    att.vx += 1.6 * (-att.facing);                       // léger contrecoup
     if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
     blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
@@ -629,7 +630,8 @@
   }
 
   function resolvePush(a, b){
-    const dx = b.x - a.x, min = pushHalf(a) + pushHalf(b);
+    // Marge de confort : les combattants ne restent pas collés en permanence.
+    const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * 1.55;
     if(Math.abs(dx) < min){
       const overlap = (min - Math.abs(dx))/2, dir = dx>=0?1:-1;
       a.x -= overlap*dir; b.x += overlap*dir;
@@ -767,13 +769,23 @@
   /** Gel long réservé aux supers, qui doivent rester spectaculaires. */
   function freezeSuper(frames){ freezeT = Math.min(45, Math.max(freezeT, frames)); }
   function spawnSpark(x,y,type){ fx.push({kind:'spark',x,y,type,t:0,life:14}); if(type==='hit')playBeep('hit'); }
-  function eggBoom(x,y){ fx.push({kind:'boom',x,y,t:0,life:26}); playBeep('boom'); }
+  function eggBoom(x,y){
+    fx.push({kind:'boom',x,y,t:0,life:34});
+    // éclats de coquille et jaune d'œuf projetés
+    for(let i=0;i<12;i++){
+      const a = (i/12)*Math.PI*2;
+      fx.push({ kind:'yolk', x, y, vx:Math.cos(a)*(2.5+Math.random()*3),
+                vy:Math.sin(a)*(2.5+Math.random()*3) - 1.5,
+                r:2.5+Math.random()*3, t:0, life:30+Math.random()*16 });
+    }
+    shake(10); playBeep('boom');
+  }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
   function shake(p){ ChickenArena._shake = Math.max(ChickenArena._shake, p); }
   function updateFx(){
     for(const o of fx){
       o.t++;
-      if(o.kind==='blood'){ o.x += o.vx; o.y += o.vy; o.vy += 0.42; o.vx *= 0.99; }
+      if(o.kind==='blood' || o.kind==='yolk'){ o.x += o.vx; o.y += o.vy; o.vy += 0.42; o.vx *= 0.99; }
       if(o.kind==='rain'){ o.x += o.vx; o.y += o.vy; if(o.y > GROUND){ o.y = -10; o.x = Math.random()*VW; } }
     }
     // Plafonne les effets : au-delà, les plus anciens sont retirés. Sans
@@ -979,12 +991,52 @@
     return c;
   }
 
-  function drawEgg(pr){ ctx.save(); ctx.translate(pr.x,pr.y); ctx.rotate(pr.rot); ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🥚',0,0); ctx.restore(); }
+  /** Œuf en vol : coquille dessinée + traînée lumineuse, bien visible. */
+  function drawEgg(pr){
+    ctx.save();
+    // traînée
+    ctx.globalAlpha = .35; ctx.fillStyle = '#ffd54a';
+    for(let i=1;i<=4;i++){
+      ctx.beginPath();
+      ctx.ellipse(pr.x - pr.vx*i*1.6, pr.y, 9-i*1.4, 12-i*1.9, 0, 0, 7);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.translate(pr.x, pr.y); ctx.rotate(pr.rot);
+    // halo
+    const g = ctx.createRadialGradient(0,0,2, 0,0,22);
+    g.addColorStop(0,'rgba(255,236,160,.9)'); g.addColorStop(1,'rgba(255,200,60,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,22,0,7); ctx.fill();
+    // coquille
+    ctx.fillStyle='#fff6e0'; ctx.strokeStyle='#c9a227'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(0,0,9,12,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.ellipse(-3,-4,3,4.5,0,0,7); ctx.fill();
+    ctx.restore();
+  }
 
   function drawFx(){
     for(const o of fx){
       if(o.kind==='spark'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.fillStyle=o.type==='block'?'#8ad':'#ffd54a'; ctx.beginPath(); ctx.arc(o.x,o.y,6+k*22,0,7); ctx.fill(); ctx.restore(); }
-      if(o.kind==='boom'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.font=(30+k*36)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('💥',o.x,o.y); ctx.restore(); }
+      if(o.kind==='boom'){
+        const k=o.t/o.life, r=14+k*46;
+        ctx.save(); ctx.globalAlpha=Math.max(0,1-k);
+        const g=ctx.createRadialGradient(o.x,o.y,2,o.x,o.y,r);
+        g.addColorStop(0,'rgba(255,255,240,1)');
+        g.addColorStop(.4,'rgba(255,214,96,.95)');
+        g.addColorStop(.75,'rgba(240,140,30,.6)');
+        g.addColorStop(1,'rgba(200,80,10,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x,o.y,r,0,7); ctx.fill();
+        // anneau de souffle
+        ctx.globalAlpha=Math.max(0,.8-k); ctx.strokeStyle='rgba(255,240,190,.9)';
+        ctx.lineWidth=3; ctx.beginPath(); ctx.arc(o.x,o.y,r*0.92,0,7); ctx.stroke();
+        ctx.restore();
+      }
+      if(o.kind==='yolk'){
+        const k=o.t/o.life; ctx.save(); ctx.globalAlpha=Math.max(0,1-k*k);
+        ctx.fillStyle = k<0.5 ? '#ffd54a' : '#f0a020';
+        ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,7); ctx.fill(); ctx.restore();
+      }
       if(o.kind==='dmg'){ const k=o.t/o.life; ctx.save(); ctx.globalAlpha=1-k; ctx.fillStyle='#fff'; ctx.font='bold 20px Fredoka,sans-serif'; ctx.textAlign='center'; ctx.fillText('-'+o.d, o.x, o.y - k*30); ctx.restore(); }
       if(o.kind==='banner'){
         const k=o.t/o.life; ctx.save(); ctx.globalAlpha=k<0.15?k/0.15:(k>0.8?(1-k)/0.2:1);

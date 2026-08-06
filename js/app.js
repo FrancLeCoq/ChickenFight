@@ -1039,22 +1039,22 @@
   // Roster du mode Combat : palettes différentes du même personnage.
   const FIGHT_ROSTER = [
     { id:'kfm',  pal:0,  name:'Kung Fu Man',   desc:'Le maître du dojo',       decor:'dojo',    hp:180, pow:0.95, xp:0,    holder:false },
-    { id:'kfm',  pal:3,  name:'Le Spadassin',  desc:'Rapide et imprévisible',  decor:'sunset',  hp:200, pow:1.05, xp:300,  holder:true, skin:'black' },
+    { id:'kfm',  pal:3,  name:'Le Spadassin',  desc:'Rapide et imprévisible',  decor:'sunset',  hp:200, pow:1.05, xp:300,  holder:true, starter:true, skin:'black' },
     { id:'kfm',  pal:6,  name:'Le Givré',      desc:'Encaisse et contre',      decor:'ice',     hp:230, pow:1.10, xp:800,  holder:true, skin:'asian' },
     { id:'kfm',  pal:9,  name:'L’Ombre',       desc:'Frappe sans prévenir',    decor:'night',   hp:250, pow:1.20, xp:1500, holder:true },
     { id:'kfm',  pal:12, name:'Le Brasier',    desc:'Coups incendiaires',      decor:'volcano', hp:255, pow:1.24, xp:2200, holder:true },
     { id:'kfm',  pal:4,  name:'Le Marécageux', desc:'Lent mais increvable',    decor:'swamp',   hp:275, pow:1.15, xp:2800, holder:true },
     { id:'kfm',  pal:7,  name:'Le Nomade',     desc:'Endurance du désert',     decor:'desert',  hp:245, pow:1.22, xp:3400, holder:true },
     { id:'kfm',  pal:10, name:'L’Orageux',     desc:'Frappe comme la foudre',  decor:'storm',   hp:260, pow:1.30, xp:4200, holder:true },
-    { id:'kfm',  pal:13, name:'Le Sylvain',    desc:'Souple et insaisissable', decor:'forest',  hp:250, pow:1.26, xp:5000, holder:true },
+    { id:'kfm',  pal:13, name:'Le Rageux',     desc:'Souple et insaisissable', decor:'forest',  hp:250, pow:1.26, xp:5000, holder:true },
     { id:'kfm',  pal:2,  name:'Le Ninja',      desc:'Ombre des toits',         decor:'city',    hp:240, pow:1.28, xp:4600, holder:true, skin:'ninja' },
-    { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',       decor:'throne',  hp:290, pow:1.38, xp:6000, holder:true }
+    { id:'kfm720', pal:0, name:'Le Grand Maître', desc:'Le boss ultime',       decor:'throne',  hp:290, pow:1.38, xp:6000, holder:true, skin:'ninja' }
   ];
 
   // Roster du mode Combat de Coq : les vrais coqs.
   const ROOSTER_ROSTER = [
     { id:'coqfu',       name:'Coq Fu Man', desc:'Ton champion',            decor:'arena',  hp:200, pow:1.00, xp:0,    holder:false },
-    { id:'valetMugen',  name:'Le Valet',   desc:'Lance son épée',          decor:'sunset', hp:215, pow:1.08, xp:400,  holder:true },
+    { id:'valetMugen',  name:'Le Valet',   desc:'Lance son épée',          decor:'sunset', hp:215, pow:1.08, xp:400,  holder:true, starter:true },
     { id:'reineMugen',  name:'La Reine',   desc:'Couronne tranchante',     decor:'ice',    hp:225, pow:1.15, xp:1000, holder:true },
     { id:'roiMugen',    name:'Le Roi',     desc:'Décret royal dévastateur', decor:'throne', hp:245, pow:1.25, xp:2000, holder:true }
   ];
@@ -1080,7 +1080,11 @@
   /** Un adversaire est-il débloqué ? (XP acquise + statut holder) */
   function rtUnlocked(entry){
     if(!entry.holder) return true;
-    return isHolder && profile.xp >= entry.xp;
+    if(!isHolder) return false;
+    // Les holders reçoivent d'emblée le premier combattant premium de
+    // chaque mode (Le Spadassin en Combat, Le Valet en Combat de Coq).
+    if(entry.starter) return true;
+    return profile.xp >= entry.xp;
   }
 
   // ── Écran de sélection ──

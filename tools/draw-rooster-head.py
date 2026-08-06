@@ -18,63 +18,68 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT  = os.path.join(ROOT, 'assets', 'rooster-head-pixel.png')
 
 # Palette — lisible et fidèle à Francis
+# Palette calquée sur la référence : béret marine à cocarde, lunettes de
+# soleil NOIRES et opaques, plumage orange, bec jaune ouvert.
 C = {
     '.': None,                 # transparent
-    'k': (26, 20, 28),         # contour
-    'B': (44, 78, 140),        # béret bleu
-    'b': (32, 58, 108),        # béret ombre
-    'H': (92, 132, 200),       # béret reflet
-    'c': (198, 42, 46),        # crête / barbillon rouge
-    'C': (232, 72, 66),        # rouge clair
-    'd': (150, 26, 34),        # rouge ombre
-    'f': (168, 96, 44),        # plumage tête
-    'F': (206, 132, 62),       # plumage clair
-    'g': (120, 64, 30),        # plumage ombre
-    'y': (243, 186, 58),       # bec
-    'Y': (255, 214, 104),      # bec clair
-    'o': (188, 128, 24),       # bec ombre
-    'w': (250, 250, 252),      # blanc de l'œil
-    'e': (28, 24, 30),         # pupille
-    'L': (58, 52, 62),         # monture des lunettes
-    'v': (150, 200, 225),      # verre (opaque, pas de transparence)
+    'k': (24, 18, 26),         # contour
+    'B': (38, 52, 92),         # béret marine
+    'b': (26, 36, 68),         # béret ombre
+    'H': (72, 92, 150),        # béret reflet
+    'R': (206, 40, 46),        # cocarde rouge
+    'W': (245, 245, 250),      # cocarde blanc
+    'N': (30, 62, 150),        # cocarde bleu
+    'c': (214, 40, 44),        # crête / barbillon
+    'C': (248, 78, 72),        # rouge clair
+    'd': (158, 22, 30),        # rouge ombre
+    'f': (226, 126, 34),       # plumage orange
+    'F': (250, 168, 66),       # plumage clair
+    'g': (176, 84, 22),        # plumage ombre
+    'y': (250, 186, 42),       # bec
+    'Y': (255, 214, 96),       # bec clair
+    'o': (198, 132, 18),       # bec ombre
+    'm': (150, 30, 40),        # intérieur du bec
+    'L': (18, 16, 20),         # monture des lunettes
+    'v': (40, 38, 46),         # verre noir opaque
+    'V': (86, 84, 96),         # reflet du verre
 }
 
 # 34 colonnes x 34 lignes. Béret ENTIER, lunettes pleines, bec net.
 ART = [
-    "..........kkkkkkkkk...............",
-    "........kkBBBBBBBBBkk.............",
-    "......kkBBBHHHHHBBBBBkk...........",
-    ".....kBBBBHHHHHHHBBBBBBk..........",
-    "....kBBBBBHHHHHHHBBBBBBBk.........",
-    "....kbBBBBBBBBBBBBBBBBBbk.........",
-    "...kbbbBBBBBBBBBBBBBBBbbbk........",
-    "...kkbbbbbbbbbbbbbbbbbbbkk........",
-    "....kkkkkkkkkkkkkkkkkkkkk.........",
-    "...kcCk.kffffffffffffffk..........",
-    "..kcCCck kfFFFFFFFFFFFFfk.........",
-    "..kcCCCkkfFFFFFFFFFFFFFFfk........",
-    "...kdcckfFFFFFFFFFFFFFFFFk........",
-    "....kkkkfFFFFFFFFFFFFFFFFk........",
-    ".......kfFFFFFFFFFFFFFFFFfk.......",
-    "......kLLLLLLLLLLLLLLLLLLLk.......",
-    "......kLvvvvLkkkLvvvvvvvvLk.......",
-    "......kLvwwwvLkkLvwwwwvvvLk.......",
-    "......kLvweewvLkLvweewvvvLk.......",
-    "......kLvweeevLkLvweeevvvLk.......",
-    "......kLvvvvvvLkLvvvvvvvvLk.......",
-    "......kLLLLLLLLkkLLLLLLLLLk.......",
-    ".......kfFFFFFFFFFFFFFFFFfk.......",
-    ".......kfFFFFFyyyyyyyyyyyyyk......",
-    ".......kfFFFkyYYYYYYYYYYYYyk......",
-    ".......kfFFkyYYYYYYYYYYYyok.......",
-    ".......kfFkyyYYYYYYYYyyook........",
-    ".......kfkkyyyyyyyyyook...........",
-    "......kcCkkkkkkkkkkkk.............",
-    "......kcCCCk......................",
-    ".....kdcCCCck.....................",
-    ".....kdcCCCck.....................",
-    "......kddccdk.....................",
-    ".......kkkkk......................",
+    "...........kkkkkkkkkkk............",
+    ".........kkBBBBBBBBBBBkk..........",
+    ".......kkBBBBHHHHHHBBBBBkk........",
+    "......kBBBBHHHHHHHHHBBBBBBk.......",
+    ".....kBBBBHHHHHHHHHHHBBBBBBk......",
+    ".....kBBRRRBBBBBBBBBBBBBBBBk......",
+    ".....kBRWWWRBBBBBBBBBBBBBBBk..kck.",
+    ".....kBRWNWRBBBBBBBBBBBBBBk..kcCk.",
+    ".....kBBRWRBBBBBBBBBBBBBBk..kcCCk.",
+    "....kbbBBRBBBBBBBBBBBBBbk..kcCCck.",
+    "....kkbbbbbbbbbbbbbbbbbk..kcCCck..",
+    ".....kkkkkkkkkkkkkkkkkk..kdcCck...",
+    "......kgfffffffffffffffgk.kdcck...",
+    ".....kgfFFFFFFFFFFFFFFFFgk.kkk....",
+    ".....kfFFFFFFFFFFFFFFFFFFfk.......",
+    "....kLLLLLLLLLLLLLLLLLLLLLLk......",
+    "....kLvvvvvvLkkLvvvvvvvvvvLk......",
+    "....kLvVvvvvLkkLvVvvvvvvvvLk......",
+    "....kLvvvvvvLkkLvvvvvvvvvvLk......",
+    "....kLLLLLLLLkkLLLLLLLLLLLLk......",
+    ".....kfFFFFFFFFFFFFFFFFFFfk.......",
+    ".....kfFFFFFFFyyyyyyyyyyyyyyk.....",
+    ".....kgfFFFFkyYYYYYYYYYYYYYYyk....",
+    "......kgfFFkyYYYYYYYYYYYYYyok.....",
+    "......kgfFkyymmmmmmmmmmyyook......",
+    "......kgfkyyYYYYYYYYYYyook........",
+    ".....kcCkkyyyyyyyyyyook...........",
+    ".....kcCCkkkkkkkkkkkk.............",
+    "....kdcCCCk.......................",
+    "....kdcCCCck......................",
+    "....kdcCCCck......................",
+    ".....kdcCCck......................",
+    ".....kddccdk......................",
+    "......kkkkk.......................",
 ]
 
 def main():
