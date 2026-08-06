@@ -991,6 +991,7 @@
     if(action==='share') shareResult();
     if(action==='forfeit'){ closeModal(); finishBattle(true); }
     if(action==='rtRetry'){ closeModal(); startFight(); }
+    if(action==='streetRetry'){ closeModal(); startStreet(); }
     if(action==='rtSelect'){ rtToSelect(); }
     if(action==='rtForfeit'){ rtForfeit(); }
     if(action==='rtMenu'){ rtQuit(); }
@@ -1289,6 +1290,46 @@
     goMenu();
   }
 
+  /** LA STREET : progression en ville, vagues d'ennemis, armes ramassées. */
+  function startStreet(){
+    if(!window.ChickenArena || !window.ChickenStreet){ toast('Moteur indisponible'); return; }
+    bindRtControls();
+    rtMode = 'street'; rtActive = true;
+    const lives = window.ChickenStreet.livesFor(isHolder);
+    $('#rtLadderBadge').textContent = `LA STREET — ${lives} VIE${lives>1?'S':''}`;
+    ChickenArena.muted = !soundEnabled;
+    ChickenArena.resetTouch();
+    showScreen('realtime');
+    ChickenArena.start({
+      canvas: $('#rtCanvas'),
+      mode:'street', lives,
+      playerId:'coqfu', enemyId:'kfm',
+      decor: window.ChickenStreet.STREET_DECOR,
+      playerName:'COQ FU MAN',
+      // Le coq encaisse bien plus que les adversaires de rue.
+      playerStats:{ hp:420, power:1.35, defense:1.6 },
+      enemyStats:{ hp:40, power:0.9, defense:1, ai:0.35 },
+      onEnd: streetOnEnd
+    });
+    setTimeout(()=>toast('🌃 Bienvenue dans La Street. Ramasse ce qui tombe.'), 900);
+  }
+
+  function streetOnEnd(r){
+    rtActive = false;
+    const gain = Math.round(r.killed * 12 + r.wave * 25);
+    profile.xp += gain; profile.feathers += Math.round(gain/4);
+    saveProfile(); renderProfile();
+    playSound('lose'); haptic('error');
+    showModal(`<div style="font-size:52px">🌃</div>
+      <h2>FIN DE PARCOURS</h2>
+      <p>Tu es tombé à la <b>vague ${r.wave}</b> après <b>${r.killed}</b> éliminations.</p>
+      <div class="reward-line"><span class="reward-chip">+${gain} XP</span><span class="reward-chip">🪶 +${Math.round(gain/4)}</span></div>
+      <div class="modal-actions">
+        <button class="modal-btn green" data-modal-action="streetRetry">RETOURNER DANS LA RUE</button>
+        <button class="modal-btn purple" data-modal-action="rtMenu">${tr('menu')}</button>
+      </div>`);
+  }
+
   function bindRtControls(){
     if(rtBound) return; rtBound = true;
     const press = (key,on) => window.ChickenArena?.setTouch(key,on);
@@ -1388,6 +1429,7 @@
     $('#freeTrainingBtn').addEventListener('click',()=>openSelect('training'));
     $('#roosterFightBtn').addEventListener('click',()=>openSelect('rooster'));
     $('#duelOnlineBtn').addEventListener('click',()=>toast('Duel en ligne : bientôt disponible !'));
+    $('#streetBtn').addEventListener('click',startStreet);
     $('#walletBtn').addEventListener('click',goWallet);
     $('#flagFr').addEventListener('click',()=>setLang('fr'));
     $('#flagEn').addEventListener('click',()=>setLang('en'));

@@ -95,6 +95,8 @@
   let input = blankInput(), keyState = {};
   let round = { n:1, wins:[0,0], timer:99*FPS, state:'intro', stateT:0, best:2 };
   let opts = null, running = false, images = {};
+  // ── Mode « La Street » : beat'em up à vagues ──
+  let street = null;   // { wave, lives, corpses, pickups, killed, mood, banner }
 
   function blankInput(){ return { left:false,right:false,up:false,down:false,light:false,heavy:false,kick:false,special:false,super:false }; }
 
@@ -232,6 +234,7 @@
     // hitstop / gel cinématique du super : la scène se fige, les FX continuent
     if(freezeT>0){ freezeT--; updateFx(); return; }
     round.stateT++;
+    if(street){ gameFrame++; stepStreet(); return; }
     if(round.state==='intro'){ if(round.stateT>70){ round.state='fight'; round.stateT=0; banner('COMBAT !','fight'); } return; }
     if(round.state==='ko' || round.state==='win'){ if(round.stateT>150) nextRound(); return; }
     if(round.state!=='fight') return;
@@ -672,7 +675,10 @@
 
   function resolvePush(a, b){
     // Marge de confort : les combattants ne restent pas collés en permanence.
-    const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * 2.15;
+    // En 1 contre 1 on aère franchement ; en mêlée (La Street) on resserre,
+    // sinon le joueur est plaqué au mur par le groupe et ne touche plus rien.
+    const margin = street ? 1.05 : 2.15;
+    const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * margin;
     if(Math.abs(dx) < min){
       const overlap = (min - Math.abs(dx))/2, dir = dx>=0?1:-1;
       a.x -= overlap*dir; b.x += overlap*dir;
@@ -731,10 +737,13 @@
   function updateProjectiles(){
     for(const pr of projectiles){
       pr.x += pr.vx; pr.rot += 0.4; pr.life--;
-      const target = fighters.find(f => f!==pr.owner);
+      const target = pr.owner === fighters[0]
+        ? fighters.slice(1).find(f => Math.abs(f.x - pr.x) < 40)
+        : fighters[0];
       if(target && overlap({x:pr.x-12,y:pr.y-12,w:24,h:24}, hurtbox(target))){
         eggBoom(pr.x, pr.y); const blocking = target.state==='block'||target.blockHold;
-        const dmg = blocking?4:Math.round(28*pr.owner.power/target.defense);
+        const base = pr.weapon ? pr.weapon.dmg : 28;
+        const dmg = blocking?4:Math.round(base*pr.owner.power/target.defense);
         target.hp -= dmg; target.flash=8; if(!blocking){ target.vx=8*(-target.facing); target.stun=22; setState(target,'hitstun'); }
         shake(12); popDamage(target.x,GROUND-120,dmg); pr.life=0;
       }
@@ -769,6 +778,162 @@
       else { out.up=true; e.aiT=18; }
     }
     return out;
+  }
+
+  // ══════════════ MODE « LA STREET » ══════════════
+
+  /** Prépare la vague courante : charge et place les adversaires. */
+  async function startWave(){
+    const S = window.ChickenStreet;
+    const list = S.wave(street.wave);
+    street.mood = S.moodFor(street.wave);
+    // charge les personnages nécessaires (une fois chacun)
+    for(const e of list){
+      const r = RENDER[e.id]; if(!r || !r.mugen) continue;
+      const key = `${e.id}#${e.pal ?? 'd'}#${e.skin ?? 'd'}`;
+      if(!mugenCache[key]){
+        try{ mugenCache[key] = await window.ChickenMugen.loadCharacter(r.def, e.pal, e.skin); }
+        catch{ continue; }
+      }
+      e.char = mugenCache[key];
+    }
+    // le joueur reste, les ennemis sont remplacés
+    const player = fighters[0];
+    fighters = [player];
+    list.forEach((e, i) => {
+      if(!e.char) return;
+      mugenLive[e.id] = e.char;
+      const f = makeFighter(e.id, 1, { hp:e.hp, power:e.power, defense:1, ai:e.ai });
+      f.mugen = e.char;
+      f.anim = new window.ChickenMugen.Animator(e.char);
+      // entrent par la droite, échelonnés
+      f.x = VW - 60 - i * 70;
+      attachCns(f);
+      fighters.push(f);
+    });
+    street.banner = 90;
+    round.state = 'fight';
+  }
+
+  /** Un adversaire tombe : il reste au sol dans une mare de sang. */
+  function streetKill(f){
+    const S = window.ChickenStreet;
+    street.corpses.push({ x:f.x, facing:f.facing, id:f.id,
+      anim:f.anim, pool:0, t:0 });
+    blood(f.x, GROUND - 60, 3);
+    street.killed++;
+    const drop = S.rollDrop();
+    if(drop) street.pickups.push({ x:f.x, y:GROUND - 18, w:drop, t:0, bob:0 });
+    fighters = fighters.filter(x => x !== f);
+    playBeep('ko');
+  }
+
+  /** Ramassage d'arme au contact. */
+  function streetPickups(p){
+    const S = window.ChickenStreet;
+    for(const it of street.pickups){
+      if(it.taken) continue;
+      if(Math.abs(it.x - p.x) < 34){
+        it.taken = true;
+        const w = S.WEAPONS[it.w];
+        p.weapon = { ...w, ammo:w.ammo };
+        banner(`${w.icon} ${w.name} !`, 'move');
+        playBeep('special');
+      }
+    }
+    street.pickups = street.pickups.filter(i => !i.taken);
+  }
+
+  /** Tir de l'arme ramassée (touche ŒUF/super réutilisée). */
+  function streetFire(p){
+    const w = p.weapon;
+    if(!w || w.ammo <= 0 || p.wCool > 0) return false;
+    p.wCool = w.cooldown;
+    w.ammo--;
+    if(w.projectile){
+      projectiles.push({ x:p.x + 26*p.facing, y:GROUND - 78,
+        vx:w.speed * p.facing, owner:p, life:120, rot:0,
+        weapon:w, superEgg:w.explodes });
+      playBeep(w.id === 'pistol' ? 'boom' : 'egg');
+    } else {
+      // épée : frappe large immédiate
+      for(const e of fighters){
+        if(e === p) continue;
+        if(Math.abs(e.x - p.x) < w.reach && (e.x - p.x) * p.facing > -20){
+          e.hp -= w.dmg; e.flash = 8;
+          e.vx = 7 * (-e.facing); e.stun = 20; setState(e, 'hitstun');
+          blood(e.x, GROUND - 90, 2.6); shake(9);
+          popDamage(e.x, GROUND - 120, w.dmg);
+        }
+      }
+      playBeep('hit');
+    }
+    if(w.ammo <= 0){ banner('ARME ÉPUISÉE', 'move'); p.weapon = null; }
+    return true;
+  }
+
+  /** Boucle propre au mode Street. */
+  function stepStreet(){
+    const p = fighters[0];
+    if(street.banner > 0) street.banner--;
+    if(p.wCool > 0) p.wCool--;
+
+    const pin = readInput();
+    // la touche du coup fatal sert aussi à tirer quand une arme est en main
+    if(pin.super && p.weapon){ streetFire(p); pin.super = false; }
+    updateFighter(p, pin, nearest(p) || p);
+    updateCns(p, nearest(p) || p);
+    streetPickups(p);
+
+    for(const e of fighters.slice(1)){
+      const target = p;
+      updateFighter(e, aiInput(e, target), target);
+      updateCns(e, target);
+      if(e.hp <= 0) streetKill(e);
+    }
+    // séparation de tous les corps
+    for(let i=0;i<fighters.length;i++)
+      for(let j=i+1;j<fighters.length;j++)
+        resolvePush(fighters[i], fighters[j]);
+
+    updateProjectiles();
+    updateFx();
+    street.corpses.forEach(c => { c.t++; if(c.pool < 46) c.pool += 0.7; });
+
+    // vague suivante
+    if(fighters.length <= 1 && round.state === 'fight'){
+      round.state = 'wavedone'; round.stateT = 0;
+    }
+    if(round.state === 'wavedone'){
+      round.stateT++;
+      if(round.stateT > 70){
+        street.wave++;
+        street.corpses = street.corpses.slice(-6);   // on garde les plus récents
+        startWave();
+      }
+    }
+    // mort du joueur
+    if(p.hp <= 0){
+      street.lives--;
+      blood(p.x, GROUND - 70, 3); bloodScreen();
+      if(street.lives <= 0){
+        running = false;
+        if(opts.onEnd) opts.onEnd({ win:false, wave:street.wave, killed:street.killed });
+        return;
+      }
+      p.hp = p.maxHp; p.x = VW * 0.25; setState(p, 'idle');
+      banner(`${street.lives} VIE${street.lives>1?'S':''} RESTANTE${street.lives>1?'S':''}`, 'ko');
+    }
+  }
+
+  function nearest(p){
+    let best = null, d = 1e9;
+    for(const f of fighters){
+      if(f === p) continue;
+      const dd = Math.abs(f.x - p.x);
+      if(dd < d){ d = dd; best = f; }
+    }
+    return best;
   }
 
   // ══════════════ ROUNDS ══════════════
@@ -857,6 +1022,7 @@
     const sx = (Math.random()-0.5)*ChickenArena._shake, sy=(Math.random()-0.5)*ChickenArena._shake;
     ctx.setTransform(cv.width/VW,0,0,cv.height/VH, sx, sy);
     drawStage();
+    drawStreetProps();
     // ombres
     fighters.forEach(f=>{ ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, GROUND+4, 40, 9, 0,0,7); ctx.fill(); });
     // combattants (le plus en arrière derrière)
@@ -886,8 +1052,9 @@
   let lightning = 0;
   function drawWeather(D){
     if(D.city) drawCity();
+    if(D.street) drawStreet();
     // En intérieur, aucune météo : ni pluie, ni nuages, ni soleil.
-    const w = D.indoor ? null : D.weather;
+    const w = D.street ? (street?.mood?.weather || 'clear') : (D.indoor ? null : D.weather);
     if(!w || w === 'clear') return;
 
     if(w === 'sun'){
@@ -933,6 +1100,78 @@
         ctx.fillStyle = `rgba(235,240,255,${0.16 + (lightning/7)*0.34})`;
         ctx.fillRect(0,0,VW,VH);
       }
+    }
+  }
+
+  /** Rue nocturne : lune, immeubles, lampadaires allumés au sol. */
+  function drawStreet(){
+    const mood = street?.mood || { moon:true };
+    // lune
+    if(mood.moon){
+      const mx = VW*0.80, my = 52;
+      const g = ctx.createRadialGradient(mx,my,6, mx,my,54);
+      g.addColorStop(0,'rgba(240,244,255,.95)'); g.addColorStop(1,'rgba(200,215,255,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(mx,my,54,0,7); ctx.fill();
+      ctx.fillStyle='#eef2ff'; ctx.beginPath(); ctx.arc(mx,my,17,0,7); ctx.fill();
+      ctx.fillStyle='rgba(180,190,215,.55)';
+      ctx.beginPath(); ctx.arc(mx-6,my-4,4,0,7); ctx.arc(mx+5,my+5,3,0,7); ctx.fill();
+    }
+    drawCity();
+    // trottoir
+    ctx.fillStyle='#111827'; ctx.fillRect(0, GROUND-10, VW, 10);
+    ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1;
+    for(let x=0;x<VW;x+=48){ ctx.beginPath(); ctx.moveTo(x,GROUND-10); ctx.lineTo(x,GROUND); ctx.stroke(); }
+    // lampadaires : halo chaud projeté sur la chaussée
+    for(let i=0;i<4;i++){
+      const lx = 70 + i*160 - ((gameFrame*0.12) % 160);
+      ctx.strokeStyle='#334155'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(lx, GROUND); ctx.lineTo(lx, GROUND-118); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx, GROUND-118); ctx.lineTo(lx+22, GROUND-126); ctx.stroke();
+      ctx.fillStyle='#fde68a';
+      ctx.beginPath(); ctx.ellipse(lx+24, GROUND-126, 7, 5, 0, 0, 7); ctx.fill();
+      const g = ctx.createRadialGradient(lx+24, GROUND-126, 4, lx+24, GROUND-126, 96);
+      g.addColorStop(0,'rgba(255,224,140,.34)'); g.addColorStop(1,'rgba(255,200,90,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(lx+24, GROUND-126, 96, 0, 7); ctx.fill();
+      // flaque de lumière au sol
+      ctx.fillStyle='rgba(255,214,120,.12)';
+      ctx.beginPath(); ctx.ellipse(lx+24, GROUND+4, 62, 11, 0, 0, 7); ctx.fill();
+    }
+  }
+
+  /** Cadavres au sol et armes à ramasser. */
+  function drawStreetProps(){
+    if(!street) return;
+    for(const c of street.corpses){
+      // mare de sang qui s'élargit
+      ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#6b0f18';
+      ctx.beginPath(); ctx.ellipse(c.x, GROUND+2, c.pool, c.pool*0.28, 0, 0, 7); ctx.fill();
+      ctx.globalAlpha=.5; ctx.fillStyle='#8f1420';
+      ctx.beginPath(); ctx.ellipse(c.x-6, GROUND+1, c.pool*0.6, c.pool*0.18, 0, 0, 7); ctx.fill();
+      ctx.restore();
+      // corps allongé : sprite couché
+      const fr = c.anim && c.anim.current();
+      if(fr){
+        const sp = fr.sprite;
+        ctx.save();
+        ctx.translate(c.x, GROUND);
+        ctx.scale(c.facing*1.75, 1.75);
+        ctx.rotate(-Math.PI/2 * 0.92);           // allongé au sol
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = .95;
+        ctx.drawImage(sp.canvas, -sp.x + fr.x, -sp.y + fr.y);
+        ctx.restore();
+      }
+    }
+    for(const it of street.pickups){
+      it.bob = Math.sin(gameFrame*0.09 + it.x)*4;
+      const w = window.ChickenStreet.WEAPONS[it.w];
+      ctx.save();
+      const g = ctx.createRadialGradient(it.x, it.y+it.bob, 2, it.x, it.y+it.bob, 26);
+      g.addColorStop(0,'rgba(255,236,150,.7)'); g.addColorStop(1,'rgba(255,210,80,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(it.x, it.y+it.bob, 26, 0, 7); ctx.fill();
+      ctx.font='26px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(w.icon, it.x, it.y + it.bob);
+      ctx.restore();
     }
   }
 
@@ -1070,6 +1309,13 @@
 
   /** Œuf en vol : coquille dessinée + traînée lumineuse, bien visible. */
   function drawEgg(pr){
+    if(pr.weapon && pr.weapon.id === 'pistol'){
+      ctx.save();
+      ctx.strokeStyle='#ffe9a8'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(pr.x, pr.y); ctx.lineTo(pr.x - pr.vx*2.2, pr.y); ctx.stroke();
+      ctx.fillStyle='#fff7d6'; ctx.beginPath(); ctx.arc(pr.x, pr.y, 3.5, 0, 7); ctx.fill();
+      ctx.restore(); return;
+    }
     ctx.save();
     // traînée
     ctx.globalAlpha = .35; ctx.fillStyle = '#ffd54a';
@@ -1166,6 +1412,7 @@
   }
 
   function drawHud(){
+    if(street){ drawStreetHud(); return; }
     const M = 16, W = 244, TOP = 30;      // marge haute : lisible même rogné
     // Fond du bandeau : détache le HUD du décor.
     ctx.fillStyle = 'rgba(8,3,20,.55)';
@@ -1188,6 +1435,43 @@
     meter(M, TOP+42, W, fighters[0], false);
     meter(VW-M-W, TOP+42, W, fighters[1], true);
   }
+  /** HUD de La Street : vie, vies restantes, vague, arme et munitions. */
+  function drawStreetHud(){
+    const p = fighters[0]; if(!p) return;
+    ctx.fillStyle='rgba(8,3,20,.55)'; ctx.fillRect(0,0,VW,64);
+    bar(16, 26, 260, p, false);
+    // vies
+    ctx.font='bold 13px Fredoka,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle='#ff6b6b';
+    ctx.fillText('❤'.repeat(Math.min(10, street.lives)), 16, 54);
+    // vague et éliminations
+    ctx.textAlign='center'; ctx.fillStyle='#ffd54a';
+    ctx.font='bold 17px Bangers,Fredoka,sans-serif';
+    ctx.fillText(`VAGUE ${street.wave}`, VW/2, 24);
+    ctx.font='bold 11px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.8)';
+    ctx.fillText(`${street.killed} éliminés · ${street.mood.desc}`, VW/2, 44);
+    // arme en main
+    ctx.textAlign='right';
+    if(p.weapon){
+      ctx.font='bold 15px Fredoka,sans-serif'; ctx.fillStyle='#ffd54a';
+      ctx.fillText(`${p.weapon.icon} ${p.weapon.name}  ×${p.weapon.ammo}`, VW-16, 30);
+      ctx.font='9px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
+      ctx.fillText('touche ŒUF pour utiliser', VW-16, 48);
+    } else {
+      ctx.font='10px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.5)';
+      ctx.fillText('aucune arme — ramasse ce qui tombe', VW-16, 34);
+    }
+    if(street.banner > 0){
+      const k = street.banner/90;
+      ctx.save(); ctx.globalAlpha = Math.min(1, k*2);
+      ctx.font='bold 40px Bangers,Fredoka,sans-serif'; ctx.textAlign='center';
+      ctx.fillStyle='#ffd54a'; ctx.strokeStyle='rgba(0,0,0,.65)'; ctx.lineWidth=5;
+      ctx.strokeText(`VAGUE ${street.wave}`, VW/2, VH*0.4);
+      ctx.fillText(`VAGUE ${street.wave}`, VW/2, VH*0.4);
+      ctx.restore();
+    }
+  }
+
   function bar(x,y,w,f,right){
     const pct = Math.max(0,f.hp/f.maxHp);
     ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(x,y,w,16);
@@ -1278,6 +1562,11 @@
       gameFrame = 0;
       projectiles=[]; fx=[]; keyState={}; this._touch=blankInput(); this._shake=0;
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
+      street = o.mode === 'street' ? {
+        wave:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
+        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0
+      } : null;
+      if(street) await startWave();
       running=true; last=0; acc=0;
       this._kd = e=>onKey(e,true); this._ku = e=>onKey(e,false);
       window.addEventListener('keydown',this._kd); window.addEventListener('keyup',this._ku);

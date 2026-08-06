@@ -1,6 +1,6 @@
-const CACHE = 'chickenfight-v2.8.0';
+const CACHE = 'chickenfight-v2.9.0';
 // Core files change on every deploy → served network-first so updates show up.
-const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
+const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/street-mode.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
 const CHARS = [
   'chars/francis/francis.def',
   'chars/francis/francis.sff',
@@ -32,7 +32,7 @@ const CHARS = [
   'chars/kfm720/kfm720.air',
   'chars/kfm720/kfm720.cmd',
   'chars/kfm720/kfm720.cns',
-  'chars/coqfu/coqfu.def','chars/coqfu/coqfu.sff','chars/coqfu/coqfu.air','chars/coqfu/coqfu.cmd','chars/coqfu/coqfu.cns'
+  'chars/coqfu/coqfu.def','chars/coqfu/coqfu.sff','chars/coqfu/coqfu.air','chars/coqfu/coqfu.cmd','chars/coqfu/coqfu.cns','chars/coqfu/head-anchors.json'
 ];
 // Static assets rarely change → cache-first for speed / offline.
 const ASSETS = [
