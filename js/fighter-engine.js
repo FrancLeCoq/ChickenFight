@@ -35,7 +35,11 @@
     kfm:    { mugen:true, def:'chars/kfm/kfm.def', scale:1.75 },
     // Coq Fu Man : corps pixel art de KFM, tête de coq. Hérite de tout son
     // moveset (mêmes .air/.cmd/.cns), donc cohérent visuellement ET mécaniquement.
-    coqfu:  { mugen:true, def:'chars/coqfu/coqfu.def', scale:1.75 },
+    // Coq Fu Man : corps pixel art de KFM + tête de coq dessinée PAR-DESSUS
+    // au rendu, en pleine qualité (pas de quantification dans le .sff).
+    coqfu:  { mugen:true, def:'chars/coqfu/coqfu.def', scale:1.75,
+              headOverlay:{ img:'assets/francis-head.webp',
+                            anchors:'chars/coqfu/head-anchors.json' } },
     kfm720: { mugen:true, def:'chars/kfm720/kfm720.def', scale:0.44 },
     // Le coq et ses évolutions, convertis au format MUGEN : ils passent
     // exactement par le même pipeline que les personnages Ikemen GO.
@@ -57,6 +61,19 @@
     kick:  { name:'kick',  startup:6,  active:4,  recovery:14, dmg:9,  meter:7,
              hit:{x:36,y:-34,w:48,h:26}, kb:6,   hitstun:16, blockstun:10, push:6, low:true },
     egg:   { name:'egg',   startup:10, active:2,  recovery:24, dmg:0,  meter:0, projectile:true },
+    // ── Gestes supplémentaires ──
+    // SAUT COUP DE PIED : en l'air uniquement, frappe en diagonale.
+    jumpkick: { name:'jumpkick', startup:5, active:8, recovery:12, dmg:14, meter:10,
+                hit:{x:30,y:-64,w:58,h:46}, kb:8, hitstun:20, blockstun:12, push:8,
+                juggle:2, label:'COUP DE PIED SAUTÉ !' },
+    // UPPERCUT DU COQ : haut + bec, envoie l'adversaire en l'air.
+    uppercut: { name:'uppercut', startup:5, active:6, recovery:22, dmg:17, meter:13,
+                hit:{x:18,y:-146,w:52,h:116}, kb:5, hitstun:26, blockstun:14, push:6,
+                launch:true, invuln:5, juggle:3, label:'UPPERCUT DU COQ !' },
+    // PIROUETTE : bas + patte, balayage tournoyant qui fait chuter.
+    pirouette: { name:'pirouette', startup:7, active:9, recovery:20, dmg:15, meter:12,
+                hit:{x:26,y:-40,w:74,h:40}, kb:9, hitstun:24, blockstun:12, push:10,
+                launch:true, juggle:2, low:true, label:'PIROUETTE !' },
     // ── Coups spéciaux (commandes directionnelles, façon Ikemen GO) ──
     // COQ ASCENDANT : anti-air, invincible au démarrage, envoie en l'air.
     dp:    { name:'dp',    startup:3,  active:8,  recovery:26, dmg:16, meter:12, special:true,
@@ -97,6 +114,18 @@
     if(!Object.keys(ch.states).length) return;
     f.cns = new window.ChickenCns.CnsRuntime(ch.states, makeCnsHost(f));
     f.cns.states = ch.states;
+  }
+
+  const headAnchors = {};   // id → { "group,image": {x,y,w} }
+  /** Charge l'illustration de tête et ses points d'ancrage. */
+  async function preloadHeadOverlay(ids){
+    for(const id of ids){
+      const ov = RENDER[id]?.headOverlay;
+      if(!ov || headAnchors[id]) continue;
+      loadImage(ov.img);
+      try{ headAnchors[id] = await (await fetch(ov.anchors)).json(); }
+      catch(e){ console.warn('[ChickenArena] ancrages de tête absents:', id); headAnchors[id] = {}; }
+    }
   }
 
   /** Charge (une seule fois) les personnages au format MUGEN nécessaires. */
@@ -267,7 +296,12 @@
         if(detected==='qcf'){ startAttack(f,'egg'); return; }
         if(detected==='charge'){ startAttack(f,'wing'); return; }
       }
-      // ── 2) boutons simples ──
+      // ── 2) combinaisons ──
+      // Haut + bec = uppercut ; bas + patte = pirouette. Les entrées
+      // maintenues suffisent, sans avoir à saisir une commande directionnelle.
+      if(inp.up && inp.light){ startAttack(f,'uppercut'); return; }
+      if(inp.down && inp.kick){ startAttack(f,'pirouette'); return; }
+      // ── 3) boutons simples ──
       // Coup fatal : touche dédiée, uniquement jauge pleine.
       if(inp.super && f.meter >= 100){ f.meter -= 100; startAttack(f,'super'); return; }
       // Œuf explosif : projectile, sur sa propre touche.
@@ -285,6 +319,7 @@
       else { f.vx = 0; setState(f,'idle'); }
     } else {
       // en l'air : contrôle horizontal léger, attaque aérienne simple
+      if(inp.kick){ startAttack(f,'jumpkick'); return; }
       if(inp.light||inp.heavy){ startAttack(f, inp.heavy?'wing':'peck'); return; }
       f.vx = fwd ? WALK*0.8*f.facing : back ? -WALK*0.8*f.facing : f.vx*0.98;
       setState(f, f.vy<0?'jump':'fall');
@@ -297,14 +332,17 @@
     // HitDef issus de son .cns) plutôt que la table de coups du moteur.
     if(f.cns && startCnsAttack(f, moveName)){
       if(MOVES[moveName]?.label) banner(MOVES[moveName].label, MOVES[moveName].super?'super':'move');
-      if(MOVES[moveName]?.super) freezeSuper(MOVES[moveName].freeze||30);
+      if(MOVES[moveName]?.super){
+        freezeSuper(14);                 // court : lisible sans bloquer le jeu
+        superEggBarrage(f);              // l'effet attendu : une volée d'œufs
+      }
       return;
     }
     f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false; f.hitCount=0;
     if(f.move.projectile){ f.spawned=false; }
     if(f.move.invuln) f.invuln = f.move.invuln;
     if(f.move.label) banner(f.move.label, f.move.super?'super':'move');
-    if(f.move.super){ freezeSuper(f.move.freeze||30); playBeep('super'); }
+    if(f.move.super){ freezeSuper(14); superEggBarrage(f); playBeep('super'); }
     else if(f.move.special) playBeep('special');
   }
   function runAttack(f, opp){
@@ -382,7 +420,9 @@
     att.meter = Math.min(100, att.meter + m.meter);
     def.meter = Math.min(100, def.meter + Math.round(m.meter*0.4));
     shake(m.super?12:(m.dmg>=13?9:5));
-    blood(def.x, GROUND - 95, Math.min(2, dmg/12));
+    // Gerbe proportionnelle : un gros coup gicle nettement plus.
+    blood(def.x, GROUND - 95, Math.min(3.2, dmg/9));
+    if(dmg >= 18) blood(def.x, GROUND - 60, 2.4);
     popDamage(def.x, GROUND-120, dmg);
     if(isFinal && att.combo>=2) popCombo(att);
   }
@@ -417,7 +457,7 @@
 
     def.hp -= dmg; def.flash = 6;
     if(def.onGround){
-      def.vx = (hd.groundVelX * 1.35) * (-def.facing);   // recul plus net
+      def.vx = (hd.groundVelX * 2.2) * (-def.facing);    // recul franc
       def.stun = hd.hitTime || 12;
       if(hd.fall || hd.groundType === 'Trip'){ def.vy = hd.airVelY || -6; def.onGround = false; }
     } else {
@@ -430,7 +470,7 @@
     att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
     def.meter = clampN(def.meter + 3, 0, 100);
     // pausetime du HitDef → hitstop, comme dans MUGEN
-    att.vx += 1.6 * (-att.facing);                       // léger contrecoup
+    att.vx += 2.8 * (-att.facing);                       // contrecoup marqué
     if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
     blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
@@ -443,7 +483,8 @@
   // vélocités et HitDef issus de leur .cns). La locomotion (marche, saut,
   // garde) reste gérée par le moteur : ces états communs vivent normalement
   // dans le common1.cns du moteur, pas dans le fichier du personnage.
-  const CNS_ATTACKS = { peck:200, wing:210, kick:230, heavy:240, dp:1000, qcb:1010, super:3000, egg:1000 };
+  const CNS_ATTACKS = { peck:200, wing:210, kick:230, heavy:240, dp:1000, qcb:1010, super:3000, egg:1000,
+    jumpkick:640, uppercut:1000, pirouette:430 };
 
   function makeCnsHost(f){
     return {
@@ -631,7 +672,7 @@
 
   function resolvePush(a, b){
     // Marge de confort : les combattants ne restent pas collés en permanence.
-    const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * 1.55;
+    const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * 2.15;
     if(Math.abs(dx) < min){
       const overlap = (min - Math.abs(dx))/2, dir = dx>=0?1:-1;
       a.x -= overlap*dir; b.x += overlap*dir;
@@ -671,6 +712,21 @@
   function overlap(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 
   // ── projectiles (œuf) ──
+  /**
+   * COCORICO FATAL : trois œufs lancés en éventail. C'est l'effet visible
+   * qui manquait — l'état CNS jouait l'animation sans rien projeter.
+   */
+  function superEggBarrage(f){
+    for(let i=0;i<3;i++){
+      setTimeout(() => {
+        if(!running) return;
+        projectiles.push({ x:f.x + 26*f.facing, y:GROUND - 70 - i*22,
+          vx:(6.5 + i*0.8)*f.facing, owner:f, life:110, rot:0, superEgg:true });
+        playBeep('egg');
+      }, i*110);
+    }
+  }
+
   function spawnEgg(f){ projectiles.push({ x:f.x+30*f.facing, y:GROUND-78, vx:6.2*f.facing, owner:f, life:120, rot:0 }); playBeep('egg'); }
   function updateProjectiles(){
     for(const pr of projectiles){
@@ -958,6 +1014,7 @@
     // (Un fillRect en "source-atop" peindrait un rectangle sur toute la
     //  scène déjà dessinée — d'où les gros rectangles rouges.)
     ctx.drawImage(img, -s.x + frame.x, -s.y + frame.y);
+    drawHeadOverlay(f, frame, s);
     if(f.flash > 0){
       // La teinte est composée dans un canvas hors écran : appliquée
       // directement sur la scène, 'source-atop' peindrait un rectangle sur
@@ -970,6 +1027,26 @@
         ctx.restore();
       }
     }
+    ctx.restore();
+  }
+
+  /**
+   * Pose l'illustration de la tête de coq sur le corps.
+   * Elle est statique : elle suit simplement le sprite, à la position
+   * calculée hors ligne pour chaque image (voir tools/build-head-anchors.py).
+   */
+  function drawHeadOverlay(f, frame, s){
+    const ov = f.r.headOverlay;
+    if(!ov) return;
+    const im = images[ov.img];
+    if(!im || !im.complete || !im.naturalWidth) return;
+    const a = headAnchors[f.id]?.[`${frame.groupKey}`];
+    if(!a) return;
+    const w = a.w, h = w * im.naturalHeight / im.naturalWidth;
+    // coordonnées relatives à l'axe du sprite, comme le corps
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(im, -s.x + frame.x + a.x, -s.y + frame.y + a.y, w, h);
     ctx.restore();
   }
 
@@ -1193,6 +1270,7 @@
       opts=o; cv=o.canvas; ctx=cv.getContext('2d');
       preload([o.playerId, o.enemyId]);
       await preloadMugen([o.playerId, o.enemyId]);
+      await preloadHeadOverlay([o.playerId, o.enemyId]);
       const P = o.playerStats||{hp:200,power:1,defense:1};
       const E = o.enemyStats||{hp:200,power:1,defense:1,ai:o.aiLevel??0.4};
       fighters=[ makeFighter(o.playerId,0,P), makeFighter(o.enemyId,1,{...E, ai:E.ai}) ];

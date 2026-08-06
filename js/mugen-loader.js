@@ -622,7 +622,9 @@
       if(!f) return null;
       const s = this.char.sprite(f.group, f.image);
       if(!s) return null;
-      return { sprite:s, x:f.x, y:f.y, flip:f.flip || '' };
+      // groupKey identifie le sprite : sert aux calques posés par-dessus
+      // (voir l'habillage "tête de coq" du moteur).
+      return { sprite:s, x:f.x, y:f.y, flip:f.flip || '', groupKey:`${f.group},${f.image}` };
     }
 
     /** true si l'animation a fait au moins un tour complet. */
