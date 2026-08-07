@@ -64,25 +64,39 @@
   ];
 
   /**
-   * Composition d'une vague : plus on avance, plus c'est dense.
+   * Un adversaire, tiré au sort, calibré sur le palier courant.
    *
    * `defense` est la clé de la difficulté ici. Les dégâts d'un coup MUGEN sont
    * proportionnels aux PV max de la cible (23/1000 pour un direct), donc
    * baisser les PV ne change RIEN au nombre de coups nécessaires. C'est en
    * divisant la défense qu'on obtient ce qui est demandé : deux poings suffisent.
    */
-  function wave(n){
-    const count   = Math.min(5, 2 + Math.floor(n / 2));
-    const hp      = 34 + n * 5;
-    const defense = Math.min(0.085, 0.05 + n * 0.004);  // ~2 directs, 1 gros coup
-    const power   = 0.85 + n * 0.05;
-    const ai      = Math.min(0.85, 0.28 + n * 0.06);
-    const list = [];
-    for(let i = 0; i < count; i++){
-      const e = POOL[Math.floor(Math.random() * POOL.length)];
-      list.push({ ...e, hp, defense, power, ai });
-    }
-    return list;
+  function pick(tier){
+    const e = POOL[Math.floor(Math.random() * POOL.length)];
+    return {
+      ...e,
+      hp:      34 + tier * 5,
+      defense: Math.min(0.085, 0.05 + tier * 0.004),  // ~2 directs, 1 gros coup
+      power:   0.85 + tier * 0.05,
+      ai:      Math.min(0.85, 0.28 + tier * 0.06)
+    };
+  }
+
+  /** Palier de difficulté : il monte tous les six adversaires abattus. */
+  const tierFor = killed => 1 + Math.floor(killed / 6);
+
+  /** Combien d'adversaires au maximum en même temps à l'écran. */
+  const maxAlive = tier => Math.min(4, 1 + Math.ceil(tier / 2));
+
+  /**
+   * Délai avant l'arrivée suivante, en frames.
+   * Ils descendent la rue un par un — mais une fois sur trois le suivant
+   * colle au précédent, histoire qu'on tombe parfois sur un petit groupe.
+   */
+  function nextDelay(tier){
+    if(Math.random() < 0.34) return 18 + Math.random() * 24;   // presque collé
+    const base = Math.max(55, 135 - tier * 10);
+    return base + Math.random() * 60;
   }
 
   /**
@@ -125,7 +139,7 @@
 
   window.ChickenStreet = {
     WEAPONS, DROPS, POOL, MOODS, STREET_DECOR,
-    rollDrop, wave, moodFor, liesDown, corpseAlpha,
+    rollDrop, pick, tierFor, maxAlive, nextDelay, moodFor, liesDown, corpseAlpha,
     CORPSE_HOLD, CORPSE_FADE,
     /** Nombre de vies selon le statut du joueur. */
     livesFor: holder => holder ? 10 : 1

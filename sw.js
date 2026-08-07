@@ -1,4 +1,4 @@
-const CACHE = 'chickenfight-v3.1.0';
+const CACHE = 'chickenfight-v3.2.0';
 // Core files change on every deploy → served network-first so updates show up.
 const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/street-mode.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
 const CHARS = [

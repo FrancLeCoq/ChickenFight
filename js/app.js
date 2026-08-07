@@ -1322,7 +1322,7 @@
     playSound('lose'); haptic('error');
     showModal(`<div style="font-size:52px">🌃</div>
       <h2>FIN DE PARCOURS</h2>
-      <p>Tu es tombé à la <b>vague ${r.wave}</b> après <b>${r.killed}</b> éliminations.</p>
+      <p>Tu as descendu <b>${r.metres ?? 0} m</b> de rue et laissé <b>${r.killed}</b> corps derrière toi.</p>
       <div class="reward-line"><span class="reward-chip">+${gain} XP</span><span class="reward-chip">🪶 +${Math.round(gain/4)}</span></div>
       <div class="modal-actions">
         <button class="modal-btn green" data-modal-action="streetRetry">RETOURNER DANS LA RUE</button>
