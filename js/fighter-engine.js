@@ -74,6 +74,15 @@
     pirouette: { name:'pirouette', startup:7, active:9, recovery:20, dmg:15, meter:12,
                 hit:{x:26,y:-40,w:74,h:40}, kb:9, hitstun:24, blockstun:12, push:10,
                 launch:true, juggle:2, low:true, label:'PIROUETTE !' },
+    // SAUT PÉRILLEUX : haut + aile. Le coq décolle en vrille et retombe
+    // sur l'adversaire — gros coup, mais long à récupérer.
+    somersault: { name:'somersault', startup:8, active:10, recovery:24, dmg:20, meter:14,
+                hit:{x:24,y:-120,w:66,h:104}, kb:9, hitstun:26, blockstun:14, push:9,
+                launch:true, juggle:3, leap:{ x:6.5, y:-11 }, label:'SAUT PÉRILLEUX !' },
+    // CHARGE DU COQ : avant/arrière + bec. Il fonce bec en avant.
+    charge: { name:'charge', startup:6, active:8, recovery:22, dmg:22, meter:14,
+                hit:{x:38,y:-84,w:70,h:60}, kb:12, hitstun:28, blockstun:15, push:14,
+                dash:11, splash:true, juggle:2, label:'CHARGE DU COQ !' },
     // ── Coups spéciaux (commandes directionnelles, façon Ikemen GO) ──
     // COQ ASCENDANT : anti-air, invincible au démarrage, envoie en l'air.
     dp:    { name:'dp',    startup:3,  active:8,  recovery:26, dmg:16, meter:12, special:true,
@@ -92,7 +101,7 @@
   // ── État module ──
   let cv, ctx, raf = null, acc = 0, last = 0, freezeT = 0, gameFrame = 0;
   let fighters = [], projectiles = [], fx = [];
-  let input = blankInput(), keyState = {};
+  let input = blankInput(), keyState = {}, keyLatch = {};
   let round = { n:1, wins:[0,0], timer:99*FPS, state:'intro', stateT:0, best:2 };
   let opts = null, running = false, images = {};
   // ── Mode « La Street » : beat'em up à vagues ──
@@ -188,12 +197,20 @@
       KeyM:'special', KeyP:'special',          // œuf projectile
       Space:'super', Enter:'super' };          // coup fatal (jauge pleine)
     const k = map[e.code];
-    if(k){ e.preventDefault(); keyState[k] = down; }
+    if(!k) return;
+    e.preventDefault();
+    keyState[k] = down;
+    // Une frappe plus courte qu'une image (16 ms) serait perdue : le moteur
+    // ne lit l'état des touches qu'une fois par pas fixe. On mémorise donc
+    // l'appui des BOUTONS jusqu'à ce qu'il ait été lu au moins une fois.
+    if(down && ATTACK_KEYS.has(k)) keyLatch[k] = true;
   }
+  const ATTACK_KEYS = new Set(['light','heavy','kick','special','super']);
   function readInput(){
     // clavier + boutons tactiles fusionnés (les tactiles écrivent dans touchState)
     const t = ChickenArena._touch;
-    for(const k in input) input[k] = !!(keyState[k] || t[k]);
+    for(const k in input) input[k] = !!(keyState[k] || t[k] || keyLatch[k]);
+    keyLatch = {};                 // consommé : un appui ne vaut qu'une lecture
     return input;
   }
 
@@ -300,10 +317,13 @@
         if(detected==='charge'){ startAttack(f,'wing'); return; }
       }
       // ── 2) combinaisons ──
-      // Haut + bec = uppercut ; bas + patte = pirouette. Les entrées
-      // maintenues suffisent, sans avoir à saisir une commande directionnelle.
+      // Une direction maintenue + un bouton suffit : pas de commande
+      // directionnelle à saisir. Les combinaisons passent AVANT les boutons
+      // simples, sinon le coup de base sortirait toujours en premier.
+      if(inp.up && inp.heavy){ startAttack(f,'somersault'); return; }
       if(inp.up && inp.light){ startAttack(f,'uppercut'); return; }
       if(inp.down && inp.kick){ startAttack(f,'pirouette'); return; }
+      if((fwd || back) && inp.light){ startAttack(f,'charge'); return; }
       // ── 3) boutons simples ──
       // Coup fatal : touche dédiée, uniquement jauge pleine.
       if(inp.super && f.meter >= 100){ f.meter -= 100; startAttack(f,'super'); return; }
@@ -344,6 +364,8 @@
     f.state='attack'; f.st=0; f.move=MOVES[moveName]; f.hitDone=false; f.hitCount=0;
     if(f.move.projectile){ f.spawned=false; }
     if(f.move.invuln) f.invuln = f.move.invuln;
+    // saut périlleux : le coq décolle vraiment
+    if(f.move.leap){ f.vx = f.move.leap.x * f.facing; f.vy = f.move.leap.y; f.onGround = false; }
     if(f.move.label) banner(f.move.label, f.move.super?'super':'move');
     if(f.move.super){ freezeSuper(14); superEggBarrage(f); playBeep('super'); }
     else if(f.move.special) playBeep('special');
@@ -394,7 +416,10 @@
       }
     }
     if(f.st >= m.startup + (m.active||0) + m.recovery){ setState(f,'idle'); f.move=null; }
-    f.vx *= 0.8;
+    // La charge fonce : elle garde son élan pendant toute la phase active,
+    // au lieu de s'éteindre comme un coup posé.
+    if(m.dash && f.st < m.startup + m.active) f.vx = m.dash * f.facing;
+    else f.vx *= 0.8;
   }
 
   function applyHit(att, def, m, isFinal=true){
@@ -427,6 +452,7 @@
     att.meter = Math.min(100, att.meter + m.meter);
     def.meter = Math.min(100, def.meter + Math.round(m.meter*0.4));
     shake(m.super?12:(m.dmg>=13?9:5));
+    if(m.splash) splash((def.x + att.x)/2, GROUND - 80);
     // Gerbe proportionnelle : un gros coup gicle nettement plus.
     blood(def.x, GROUND - 95, Math.min(3.2, dmg/9));
     if(dmg >= 18) blood(def.x, GROUND - 60, 2.4);
@@ -479,6 +505,8 @@
     // pausetime du HitDef → hitstop, comme dans MUGEN
     att.vx += 1.3 * (-att.facing);                       // léger contrecoup
     if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
+    // La charge garde son gros impact même quand c'est le .cns qui frappe.
+    if(att.move?.splash) splash((def.x + att.x)/2, GROUND - 80);
     blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
     popDamage(def.x, GROUND-120, dmg);
@@ -491,7 +519,9 @@
   // garde) reste gérée par le moteur : ces états communs vivent normalement
   // dans le common1.cns du moteur, pas dans le fichier du personnage.
   const CNS_ATTACKS = { peck:200, wing:210, kick:230, heavy:240, dp:1000, qcb:1010, super:3000, egg:1000,
-    jumpkick:640, uppercut:1000, pirouette:430 };
+    jumpkick:640, uppercut:1000, pirouette:430,
+    // 1050 = Kung Fu Knee (genou sauté), 1400 = Kung Fu Zankou (charge)
+    somersault:1050, charge:1400 };
 
   function makeCnsHost(f){
     return {
@@ -644,6 +674,14 @@
         case 'qcb':   return A.strongKick;
         case 'egg':   return A.lightKick;
         case 'super': return A.strongPunch;
+        // Gestes propres aux coqs : ils ont leurs propres poses (voir
+        // tools/build-rooster-mugen.py). Sans animation dédiée, l'Animator
+        // garde la précédente — un repli vaut donc mieux que rien.
+        case 'pirouette':  return f.anim?.char?.anims[430] ? 430 : A.strongKick;
+        case 'somersault': return f.anim?.char?.anims[440] ? 440 : A.jumpUp;
+        case 'charge':     return f.anim?.char?.anims[450] ? 450 : A.strongPunch;
+        case 'uppercut':   return A.strongPunch;
+        case 'jumpkick':   return A.strongKick;
       }
       return A.lightPunch;
     }
@@ -830,37 +868,46 @@
 
   // ══════════════ MODE « LA STREET » ══════════════
 
-  /** Prépare la vague courante : charge et place les adversaires. */
-  async function startWave(){
+  /**
+   * Charge une fois pour toutes les silhouettes que la rue peut envoyer.
+   * Les arrivées sont ensuite instantanées : plus d'attente entre deux
+   * groupes, la rue coule sans interruption.
+   */
+  async function preloadStreetPool(){
     const S = window.ChickenStreet;
-    const list = S.wave(street.wave);
-    street.mood = S.moodFor(street.wave);
-    // charge les personnages nécessaires (une fois chacun)
-    for(const e of list){
+    // La Street n'a pas d'adversaire attitré : on écarte celui que le
+    // démarrage de duel a créé. Sinon il traîne avec des stats de duel
+    // (défense 1, donc increvable) et occupe une place à l'écran.
+    fighters = [fighters[0]];
+    for(const e of S.POOL){
       const r = RENDER[e.id]; if(!r || !r.mugen) continue;
       const key = `${e.id}#${e.pal ?? 'd'}#${e.skin ?? 'd'}`;
       if(!mugenCache[key]){
         try{ mugenCache[key] = await window.ChickenMugen.loadCharacter(r.def, e.pal, e.skin); }
         catch{ continue; }
       }
-      e.char = mugenCache[key];
     }
-    // le joueur reste, les ennemis sont remplacés
-    const player = fighters[0];
-    fighters = [player];
-    list.forEach((e, i) => {
-      if(!e.char) return;
-      mugenLive[e.id] = e.char;
-      const f = makeFighter(e.id, 1, { hp:e.hp, power:e.power, defense:e.defense ?? 1, ai:e.ai });
-      f.mugen = e.char;
-      f.anim = new window.ChickenMugen.Animator(e.char);
-      // entrent par la droite, échelonnés
-      f.x = VW - 60 - i * 70;
-      attachCns(f);
-      fighters.push(f);
-    });
-    street.banner = 90;
+    street.spawnT = 40;
     round.state = 'fight';
+  }
+
+  /** Fait entrer UN adversaire par la droite, hors champ. */
+  function spawnStreetEnemy(){
+    const S = window.ChickenStreet;
+    const e = S.pick(S.tierFor(street.killed));
+    const key = `${e.id}#${e.pal ?? 'd'}#${e.skin ?? 'd'}`;
+    const char = mugenCache[key];
+    if(!char) return false;
+    mugenLive[e.id] = char;
+    const f = makeFighter(e.id, 1, { hp:e.hp, power:e.power, defense:e.defense, ai:e.ai });
+    f.mugen = char;
+    f.anim = new window.ChickenMugen.Animator(char);
+    // il descend la rue : il apparaît hors champ et marche vers la gauche
+    f.x = VW + 30 + Math.random() * 40;
+    f.facing = -1;
+    attachCns(f);
+    fighters.push(f);
+    return true;
   }
 
   /** Un adversaire tombe : il s'efface en clignotant, la mare de sang reste. */
@@ -931,9 +978,13 @@
    */
   function scrollStreet(p){
     const edge = VW * 0.46;
-    const d = p.x - edge;
+    // Pendant une attaque, la caméra ne suit pas : sinon une charge fait
+    // défiler le décor à la place du coq, qui n'atteint jamais sa cible.
+    // Hors attaque elle rattrape, vite mais progressivement — pas d'à-coup.
+    const cap = p.state === 'attack' ? 0 : WALK * 2.4;
+    const d = Math.min(p.x - edge, cap);
     if(d <= 0) return;
-    p.x = edge;
+    p.x -= d;
     street.scroll += d;
     for(const f of fighters) if(f !== p) f.x -= d;
     for(const c of street.corpses) c.x -= d;
@@ -942,6 +993,27 @@
     // ce qui est sorti loin derrière ne reviendra pas
     street.corpses = street.corpses.filter(c => c.x > -80);
     street.pickups = street.pickups.filter(i => i.x > -40);
+  }
+
+  /**
+   * Cadence des arrivées. Un adversaire descend la rue, puis un autre —
+   * jamais tous d'un coup. La météo change au fil des paliers.
+   */
+  function streetSpawner(){
+    const S = window.ChickenStreet;
+    const tier = S.tierFor(street.killed);
+    if(tier !== street.tier){
+      street.tier = tier;
+      street.mood = S.moodFor(tier);
+      street.corpses = street.corpses.slice(-6);
+    }
+    if(street.spawnT > 0){ street.spawnT--; return; }
+    const alive = fighters.length - 1;
+    // On laisse toujours passer quelqu'un quand la rue est vide, sinon on
+    // respecte le plafond : c'est ce qui garde le combat lisible.
+    if(alive >= S.maxAlive(tier)){ street.spawnT = 20; return; }
+    if(spawnStreetEnemy()) street.spawnT = S.nextDelay(tier);
+    else street.spawnT = 40;
   }
 
   /** Boucle propre au mode Street. */
@@ -982,28 +1054,17 @@
     updateFx();
     street.corpses.forEach(c => { c.t++; if(c.pool < 46) c.pool += 0.7; });
 
-    // vague suivante
-    if(fighters.length <= 1 && round.state === 'fight'){
-      round.state = 'wavedone'; round.stateT = 0;
-    }
-    if(round.state === 'wavedone'){
-      round.stateT++;
-      // startWave est asynchrone (chargement des personnages) : sans ce
-      // verrou, la condition repasse à chaque frame et les vagues défilent.
-      if(round.stateT > 70){
-        round.state = 'waveload';
-        street.wave++;
-        street.corpses = street.corpses.slice(-6);   // on garde les plus récents
-        startWave();
-      }
-    }
+    // Arrivées continues : ils descendent la rue un par un, parfois
+    // presque collés. Plus de vagues, donc plus de temps mort.
+    streetSpawner();
     // mort du joueur
     if(p.hp <= 0){
       street.lives--;
       blood(p.x, GROUND - 70, 3); bloodScreen();
       if(street.lives <= 0){
         running = false;
-        if(opts.onEnd) opts.onEnd({ win:false, wave:street.wave, killed:street.killed });
+        if(opts.onEnd) opts.onEnd({ win:false, wave:street.tier, killed:street.killed,
+          metres:Math.round(street.scroll/10) });
         return;
       }
       p.hp = p.maxHp; p.x = VW * 0.25; setState(p, 'idle');
@@ -1087,11 +1148,24 @@
     shake(10); playBeep('boom');
   }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
+  /** Gros impact de la charge : onde de choc, éclats et plumes arrachées. */
+  function splash(x, y){
+    fx.push({ kind:'splash', x, y, t:0, life:26 });
+    for(let i=0;i<16;i++){
+      const a = -Math.PI + (i/16)*Math.PI*2, s = 3 + Math.random()*5;
+      fx.push({ kind:'plume', x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s - 2,
+                rot:Math.random()*6, r:3+Math.random()*3.5,
+                t:0, life:26+Math.random()*20 });
+    }
+    shake(15); freeze(5); playBeep('boom');
+  }
   function shake(p){ ChickenArena._shake = Math.max(ChickenArena._shake, p); }
   function updateFx(){
     for(const o of fx){
       o.t++;
       if(o.kind==='blood' || o.kind==='yolk'){ o.x += o.vx; o.y += o.vy; o.vy += 0.42; o.vx *= 0.99; }
+      // les plumes planent : peu de gravité, beaucoup de frottement
+      if(o.kind==='plume'){ o.x += o.vx; o.y += o.vy; o.vy += 0.14; o.vx *= 0.96; o.vy *= 0.97; }
       if(o.kind==='rain'){ o.x += o.vx; o.y += o.vy; if(o.y > GROUND){ o.y = -10; o.x = Math.random()*VW; } }
     }
     // Plafonne les effets : au-delà, les plus anciens sont retirés. Sans
@@ -1353,6 +1427,8 @@
     qcb:       { a0:-0.9, a1:1.0,  r:72, y:-74, color:'190,226,255', width:13 },
     pirouette: { a0:-0.2, a1:2.4,  r:64, y:-52, color:'255,208,160', width:12, plume:true },
     jumpkick:  { a0:-1.1, a1:0.5,  r:72, y:-74, color:'214,236,255', width:13 },
+    somersault:{ a0:1.4,  a1:-2.2, r:76, y:-104, color:'255,240,200', width:16, plume:true },
+    charge:    { a0:-0.5, a1:0.35, r:88, y:-84, color:'255,228,170', width:19, plume:true },
     super:     { a0:-1.6, a1:1.2,  r:92, y:-98, color:'255,208,120', width:20, plume:true }
   };
 
@@ -1626,6 +1702,35 @@
         ctx.lineWidth=3; ctx.beginPath(); ctx.arc(o.x,o.y,r*0.92,0,7); ctx.stroke();
         ctx.restore();
       }
+      if(o.kind==='splash'){
+        const k = o.t/o.life, r = 10 + k*74;
+        ctx.save();
+        // onde de choc : deux anneaux qui s'ouvrent
+        ctx.globalAlpha = Math.max(0, 1-k);
+        ctx.strokeStyle = 'rgba(255,248,225,.95)'; ctx.lineWidth = 7*(1-k)+1;
+        ctx.beginPath(); ctx.ellipse(o.x, o.y, r, r*0.72, 0, 0, 7); ctx.stroke();
+        ctx.globalAlpha = Math.max(0, .7-k);
+        ctx.strokeStyle = 'rgba(255,196,90,.9)'; ctx.lineWidth = 4*(1-k)+1;
+        ctx.beginPath(); ctx.ellipse(o.x, o.y, r*0.62, r*0.46, 0, 0, 7); ctx.stroke();
+        // cœur incandescent
+        ctx.globalAlpha = Math.max(0, .9-k*1.6);
+        const g = ctx.createRadialGradient(o.x,o.y,2,o.x,o.y,r*0.5);
+        g.addColorStop(0,'rgba(255,255,250,1)');
+        g.addColorStop(.5,'rgba(255,206,110,.8)');
+        g.addColorStop(1,'rgba(255,150,40,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x,o.y,r*0.5,0,7); ctx.fill();
+        ctx.restore();
+      }
+      if(o.kind==='plume'){
+        const k = o.t/o.life;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1-k);
+        ctx.translate(o.x, o.y);
+        ctx.rotate(o.rot + o.t*0.12);
+        ctx.fillStyle = k < 0.5 ? 'rgba(255,248,232,.95)' : 'rgba(236,214,180,.8)';
+        ctx.beginPath(); ctx.ellipse(0, 0, o.r*1.9, o.r*0.7, 0, 0, 7); ctx.fill();
+        ctx.restore();
+      }
       if(o.kind==='yolk'){
         const k=o.t/o.life; ctx.save(); ctx.globalAlpha=Math.max(0,1-k*k);
         ctx.fillStyle = k<0.5 ? '#ffd54a' : '#f0a020';
@@ -1715,12 +1820,12 @@
     ctx.font='bold 13px Fredoka,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
     ctx.fillStyle='#ff6b6b';
     ctx.fillText('❤'.repeat(Math.min(10, street.lives)), 16, 54);
-    // vague et éliminations
+    // progression : distance parcourue et éliminations
     ctx.textAlign='center'; ctx.fillStyle='#ffd54a';
     ctx.font='bold 17px Bangers,Fredoka,sans-serif';
-    ctx.fillText(`VAGUE ${street.wave}`, VW/2, 24);
+    ctx.fillText(`${street.killed} ÉLIMINÉS`, VW/2, 24);
     ctx.font='bold 11px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.8)';
-    ctx.fillText(`${street.killed} éliminés · ${street.mood.desc}`, VW/2, 44);
+    ctx.fillText(`${Math.round(street.scroll/10)} m · ${street.mood.desc}`, VW/2, 44);
     // arme en main
     ctx.textAlign='right';
     if(p.weapon){
@@ -1735,10 +1840,10 @@
     if(street.banner > 0){
       const k = street.banner/90;
       ctx.save(); ctx.globalAlpha = Math.min(1, k*2);
-      ctx.font='bold 40px Bangers,Fredoka,sans-serif'; ctx.textAlign='center';
+      ctx.font='bold 34px Bangers,Fredoka,sans-serif'; ctx.textAlign='center';
       ctx.fillStyle='#ffd54a'; ctx.strokeStyle='rgba(0,0,0,.65)'; ctx.lineWidth=5;
-      ctx.strokeText(`VAGUE ${street.wave}`, VW/2, VH*0.4);
-      ctx.fillText(`VAGUE ${street.wave}`, VW/2, VH*0.4);
+      ctx.strokeText('LA STREET', VW/2, VH*0.4);
+      ctx.fillText('LA STREET', VW/2, VH*0.4);
       ctx.restore();
     }
   }
@@ -1810,7 +1915,7 @@
     // continue. Sans plafond, tout le retard serait rejoué d'un bloc au
     // retour — d'où la salve de coups ingérable. On ignore les écarts
     // anormaux et on borne l'accumulateur.
-    if(delta > 250){ delta = DT; acc = 0; ChickenArena.resetTouch(); keyState = {}; }
+    if(delta > 250){ delta = DT; acc = 0; ChickenArena.resetTouch(); keyState = {}; keyLatch = {}; }
     acc = Math.min(acc + delta, DT * 5);
     let guard = 0;
     while(acc >= DT && guard < 5){ step(); acc -= DT; guard++; }
@@ -1831,13 +1936,13 @@
       fighters=[ makeFighter(o.playerId,0,P), makeFighter(o.enemyId,1,{...E, ai:E.ai}) ];
       fighters.forEach(attachCns);
       gameFrame = 0;
-      projectiles=[]; fx=[]; keyState={}; this._touch=blankInput(); this._shake=0;
+      projectiles=[]; fx=[]; keyState={}; keyLatch={}; this._touch=blankInput(); this._shake=0;
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       street = o.mode === 'street' ? {
-        wave:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
+        tier:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
         mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0, scroll:0
       } : null;
-      if(street) await startWave();
+      if(street) await preloadStreetPool();
       running=true; last=0; acc=0;
       this._kd = e=>onKey(e,true); this._ku = e=>onKey(e,false);
       window.addEventListener('keydown',this._kd); window.addEventListener('keyup',this._ku);
@@ -1845,11 +1950,11 @@
       // aucune touche restée enfoncée pendant l'absence.
       this._vis = () => {
         if(document.hidden) return;
-        last = 0; acc = 0; keyState = {}; this.resetTouch();
+        last = 0; acc = 0; keyState = {}; keyLatch = {}; this.resetTouch();
         fighters.forEach(f => { f.buffer = []; f.cmd?.reset(); });
       };
       document.addEventListener('visibilitychange', this._vis);
-      window.addEventListener('blur', () => { keyState = {}; this.resetTouch(); });
+      window.addEventListener('blur', () => { keyState = {}; keyLatch = {}; this.resetTouch(); });
       raf=requestAnimationFrame(frame);
     },
     setTouch(k,v){ this._touch[k]=v; },
@@ -1866,13 +1971,14 @@
     /** État interne, pour le diagnostic et les tests. */
     /** Avancée du joueur dans la rue (mode Street), en unités monde. */
     streetInfo(){
-      return street ? { scroll:Math.round(street.scroll), wave:street.wave,
+      return street ? { scroll:Math.round(street.scroll), tier:street.tier, alive:fighters.length-1,
         lives:street.lives, killed:street.killed, corpses:street.corpses.length } : null;
     },
     debug(){
       return fighters.map(f => ({
         id:f.id, hp:Math.round(f.hp), maxHp:f.maxHp, state:f.state,
         move:f.move?.name ?? null, st:f.st, anim:f.anim?.no ?? null,
+        pow:f.power, def:f.defense, combo:f.combo,
         cnsState:f.cns?.stateNo ?? null, hasCns:!!f.cns,
         hitDef:!!f.hitDef, meter:Math.round(f.meter), x:Math.round(f.x)
       }));
@@ -1881,7 +1987,7 @@
     stop(){ running=false; if(raf)cancelAnimationFrame(raf); raf=null;
       window.removeEventListener('keydown',this._kd); window.removeEventListener('keyup',this._ku);
       if(this._vis) document.removeEventListener('visibilitychange', this._vis);
-      keyState = {}; this.resetTouch(); }
+      keyState = {}; keyLatch = {}; this.resetTouch(); }
   };
   window.ChickenArena = ChickenArena;
 })();

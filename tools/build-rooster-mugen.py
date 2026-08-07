@@ -133,6 +133,7 @@ def build_poses(parts, rigged=True):
     P[(5000,0)] = compose(parts, body_rot=0.22, body_dx=-12, head_rot=0.36, tail_rot=0.30)
     # 5110 — au sol (K.O.)
     P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9, head_rot=0.5)
+    P.update(build_specials(parts))
     return P
 
 def build_poses_simple(parts):
@@ -164,6 +165,36 @@ def build_poses_simple(parts):
     P[(230,2)] = compose(parts, body_rot=0.10, body_dx=14, body_dy=-6, squash=1.06)
     P[(5000,0)] = compose(parts, body_rot=0.26, body_dx=-16)
     P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9)
+    P.update(build_specials(parts))
+    return P
+
+
+def build_specials(parts):
+    """Gestes spéciaux, communs aux coqs riggés ou non.
+
+    Ils doivent se lire au premier coup d'œil : la pirouette tourne à ras du
+    sol, le saut périlleux fait un tour complet en l'air, la charge s'allonge
+    à l'horizontale comme un bélier.
+    """
+    P = {}
+    # 430 — pirouette : le coq s'écrase et tourne au ras du sol
+    P[(430,0)] = compose(parts, squash=0.72, stretch=1.16, body_rot=-0.30, body_dy=8)
+    P[(430,1)] = compose(parts, squash=0.66, stretch=1.30, body_rot=-1.30, body_dy=10, body_dx=10)
+    P[(430,2)] = compose(parts, squash=0.68, stretch=1.26, body_rot=-2.60, body_dy=8,  body_dx=20)
+    P[(430,3)] = compose(parts, squash=0.74, stretch=1.14, body_rot=-4.00, body_dy=6,  body_dx=26)
+    P[(430,4)] = compose(parts, squash=0.80, stretch=1.06, body_rot=-5.30, body_dy=2,  body_dx=18)
+    # 440 — saut périlleux : tour complet, de plus en plus haut puis retombée
+    P[(440,0)] = compose(parts, squash=0.80, stretch=1.10, body_rot=-0.25, body_dy=10)
+    P[(440,1)] = compose(parts, squash=1.06, body_rot=-1.20, body_dy=-46, body_dx=14)
+    P[(440,2)] = compose(parts, squash=1.02, body_rot=-2.50, body_dy=-72, body_dx=30)
+    P[(440,3)] = compose(parts, squash=1.02, body_rot=-3.90, body_dy=-70, body_dx=46)
+    P[(440,4)] = compose(parts, squash=1.04, body_rot=-5.10, body_dy=-42, body_dx=58)
+    P[(440,5)] = compose(parts, squash=0.88, stretch=1.08, body_rot=-6.10, body_dy=-6, body_dx=64)
+    # 450 — charge : le coq s'étire à l'horizontale, bec en avant
+    P[(450,0)] = compose(parts, squash=0.86, stretch=1.10, body_rot=-0.24, body_dx=-14)
+    P[(450,1)] = compose(parts, squash=0.74, stretch=1.42, body_rot=0.42, body_dx=30, body_dy=-6)
+    P[(450,2)] = compose(parts, squash=0.70, stretch=1.52, body_rot=0.52, body_dx=52, body_dy=-4)
+    P[(450,3)] = compose(parts, squash=0.84, stretch=1.22, body_rot=0.26, body_dx=26)
     return P
 
 def crop_poses(poses):
@@ -324,6 +355,27 @@ AIR = """; Francis Le Coq — animations (numéros standard MUGEN)
 230,0, 0,0, 4
 230,1, 0,0, 6
 230,2, 0,0, 5
+
+[Begin Action 430]    ; pirouette (bas + patte)
+430,0, 0,0, 3
+430,1, 0,0, 3
+430,2, 0,0, 3
+430,3, 0,0, 3
+430,4, 0,0, 6
+
+[Begin Action 440]    ; saut périlleux (haut + aile)
+440,0, 0,0, 4
+440,1, 0,0, 3
+440,2, 0,0, 3
+440,3, 0,0, 3
+440,4, 0,0, 3
+440,5, 0,0, 8
+
+[Begin Action 450]    ; charge du coq (avant/arrière + bec)
+450,0, 0,0, 4
+450,1, 0,0, 3
+450,2, 0,0, 5
+450,3, 0,0, 8
 
 [Begin Action 5000]   ; touché
 5000,0, 0,0, -1
