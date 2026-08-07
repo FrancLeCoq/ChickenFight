@@ -359,7 +359,11 @@
         let touched;
         if(atk && def) touched = anyOverlap(atk, def);
         else {
-          const reach = 60 + (f.hitDef.attr.includes('A') ? 10 : 0);
+          // Repli quand le .air ne donne pas de boîte : la portée doit rester
+          // cohérente avec l'écart imposé par les pushbox, sinon le coup ne
+          // peut jamais porter.
+          const reach = (pushHalf(f) + pushHalf(opp)) * 1.5
+                      + (f.hitDef.attr.includes('A') ? 12 : 0);
           touched = Math.abs(opp.x - f.x) < reach && Math.abs(opp.y - f.y) < 130;
         }
         if(touched){
@@ -460,7 +464,7 @@
 
     def.hp -= dmg; def.flash = 6;
     if(def.onGround){
-      def.vx = (hd.groundVelX * 2.2) * (-def.facing);    // recul franc
+      def.vx = (hd.groundVelX * 1.45) * (-def.facing);   // recul net, mais sans casser la portée
       def.stun = hd.hitTime || 12;
       if(hd.fall || hd.groundType === 'Trip'){ def.vy = hd.airVelY || -6; def.onGround = false; }
     } else {
@@ -473,7 +477,7 @@
     att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
     def.meter = clampN(def.meter + 3, 0, 100);
     // pausetime du HitDef → hitstop, comme dans MUGEN
-    att.vx += 2.8 * (-att.facing);                       // contrecoup marqué
+    att.vx += 1.3 * (-att.facing);                       // léger contrecoup
     if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
     blood(def.x, GROUND - 95, Math.min(2, dmg/12));
     shake(hd.damage >= 40 ? 11 : hd.damage >= 20 ? 8 : 5);
@@ -705,7 +709,10 @@
     // Marge de confort : les combattants ne restent pas collés en permanence.
     // En 1 contre 1 on aère franchement ; en mêlée (La Street) on resserre,
     // sinon le joueur est plaqué au mur par le groupe et ne touche plus rien.
-    const margin = street ? 1.05 : 2.15;
+    // 2,15 aérait bien trop : l'écart au repos (117) dépassait la portée du
+    // coup de bec (135 au mieux) dès le moindre recul, et plus rien ne
+    // touchait. 1,65 garde de l'air sans rendre les échanges stériles.
+    const margin = street ? 1.05 : 1.65;
     const dx = b.x - a.x, min = (pushHalf(a) + pushHalf(b)) * margin;
     if(Math.abs(dx) >= min) return;
     const push = min - Math.abs(dx), dir = dx>=0?1:-1;
