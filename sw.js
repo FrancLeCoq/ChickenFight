@@ -1,4 +1,4 @@
-const CACHE = 'chickenfight-v2.9.0';
+const CACHE = 'chickenfight-v3.1.0';
 // Core files change on every deploy → served network-first so updates show up.
 const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/fighter-engine.js', 'js/street-mode.js', 'js/command-system.js', 'js/mugen-loader.js', 'js/cns-interpreter.js', 'js/netcode.js', 'manifest.webmanifest'];
 const CHARS = [
@@ -37,7 +37,8 @@ const CHARS = [
 // Static assets rarely change → cache-first for speed / offline.
 const ASSETS = [
   'assets/francis-default.webp', 'assets/francis-happy.webp', 'assets/francis-sad.webp',
-  'assets/francis-body.webp', 'assets/francis-head.webp', 'assets/francis-tail.webp',
+  'assets/francis-body.webp', 'assets/francis-head.webp', 'assets/francis-head-fight.webp',
+  'assets/francis-tail.webp',
   'assets/valet.webp', 'assets/reine.webp', 'assets/roi.webp',
   'assets/icon-192.png', 'assets/icon-512.png'
 ];
@@ -65,7 +66,9 @@ self.addEventListener('fetch', event => {
   const isCore = sameOrigin && (
     req.mode === 'navigate' ||
     url.pathname.endsWith('/') ||
-    /\.(?:html|css|js|webmanifest)$/.test(url.pathname)
+    // Le .json des ancrages de tête suit le code : servi depuis le cache, il
+    // se retrouverait décalé d'une version par rapport au moteur.
+    /\.(?:html|css|js|json|webmanifest)$/.test(url.pathname)
   );
 
   if (isCore) {

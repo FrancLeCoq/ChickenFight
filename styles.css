@@ -309,7 +309,7 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
 @keyframes yolkFly{to{transform:rotate(var(--a,0deg)) translateY(-48px) scale(.3);opacity:0}}
 /* ---- Menu : nouveaux modes ---- */
 .menu-btn.rooster-mode{background:linear-gradient(135deg,#b45309,#78350f)}
-.menu-btn.street-mode{background:linear-gradient(135deg,#1e293b,#020617);box-shadow:0 8px 22px rgba(2,6,23,.5)}
+.menu-btn.street-mode{background:linear-gradient(135deg,#16a34a,#166534);box-shadow:0 8px 22px rgba(22,163,74,.25)}
 .menu-btn.soon{background:linear-gradient(135deg,#475569,#1e293b);opacity:.75}
 .soon-pill{background:rgba(255,255,255,.18);letter-spacing:1px}
 

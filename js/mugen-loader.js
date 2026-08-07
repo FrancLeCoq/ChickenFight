@@ -615,7 +615,7 @@
       return false;
     }
 
-    /** Frame courante : { sprite, x, y, flip } ou null. */
+    /** Frame courante : { sprite, x, y, flip, hit, hurt } ou null. */
     current(){
       if(!this.anim) return null;
       const f = this.anim.frames[this.i];
@@ -624,7 +624,10 @@
       if(!s) return null;
       // groupKey identifie le sprite : sert aux calques posés par-dessus
       // (voir l'habillage "tête de coq" du moteur).
-      return { sprite:s, x:f.x, y:f.y, flip:f.flip || '', groupKey:`${f.group},${f.image}` };
+      // hit/hurt : les boîtes Clsn1/Clsn2 du .air. Sans elles, le moteur
+      // retombe sur une portée approximative et les coups ne portent plus.
+      return { sprite:s, x:f.x, y:f.y, flip:f.flip || '', groupKey:`${f.group},${f.image}`,
+               hit:f.hit || null, hurt:f.hurt || null };
     }
 
     /** true si l'animation a fait au moins un tour complet. */
