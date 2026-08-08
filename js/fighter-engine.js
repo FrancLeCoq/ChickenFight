@@ -283,7 +283,19 @@
     // fenêtre de combo : au-delà, le compteur retombe
     if(f.comboT>0){ f.comboT--; if(f.comboT===0){ f.combo=0; } }
     if(f.onGround && f.state!=='hitstun') f.juggle = 0;
-    f.facing = (opp.x >= f.x) ? 1 : -1;   // fait toujours face à l'adversaire (au sol)
+    // En duel on fait toujours face à l'adversaire. Dans La Street on remonte
+    // une rue : le joueur doit se retourner quand il repart vers la gauche,
+    // sinon il marche à reculons. Il ne se retourne qu'en dehors d'un coup,
+    // pour ne pas inverser une attaque en cours.
+    if(street && f === fighters[0]){
+      if(f.state !== 'attack' && f.state !== 'hitstun'){
+        if(inp.right) f.facing = 1;
+        else if(inp.left) f.facing = -1;
+        else f.facing = (opp.x >= f.x) ? 1 : -1;
+      }
+    } else {
+      f.facing = (opp.x >= f.x) ? 1 : -1;
+    }
 
     const prevDir = f.buffer.length?f.buffer[f.buffer.length-1].d:5;
     pushBuffer(f, inp, prevDir);
@@ -393,10 +405,10 @@
           f.hitDefUsed = true; f.moveContact = 1; f.moveHit = 1;
         }
       }
-      f.vx *= 0.92;
+      dashMomentum(f);
       return;
     }
-    if(f.cns){ f.vx *= 0.92; return; }   // état CNS sans HitDef actif
+    if(f.cns){ dashMomentum(f); return; }   // état CNS sans HitDef actif
     const m = f.move;
     if(m.projectile){
       if(f.st===m.startup && !f.spawned){ spawnEgg(f); f.spawned=true; }
@@ -422,6 +434,31 @@
     else f.vx *= 0.8;
   }
 
+  /**
+   * Élan d'une charge, côté personnage MUGEN.
+   * Son .cns pilote déjà ses déplacements, mais rien n'y garantit qu'un coup
+   * lancé continue vers l'avant : on impose donc le sens pendant la phase
+   * active, sans quoi la charge peut finir derrière son point de départ.
+   */
+  function dashMomentum(f){
+    const m = f.move;
+    if(m?.dash && f.st < m.startup + m.active) f.vx = m.dash * 0.55 * f.facing;
+    else f.vx *= 0.92;
+  }
+
+  // Anti-enchaînement sans fin : passé un certain nombre de coups d'affilée,
+  // le défenseur se dégage avec un bref répit d'invincibilité. Sans cela, un
+  // joueur qui martèle un bouton enchaîne indéfiniment et l'adversaire ne
+  // reprend jamais la main — le combat n'a plus d'intérêt.
+  const COMBO_MAX = 5;
+  function comboBreak(att, def){
+    if(att.combo < COMBO_MAX) return false;
+    att.combo = 0; att.comboT = 0;
+    def.invuln = Math.max(def.invuln, 22);
+    def.vx = 4.5 * (-def.facing);
+    return true;
+  }
+
   function applyHit(att, def, m, isFinal=true){
     // invincibilité (démarrage de DP / super) : le coup passe à travers
     if(def.invuln>0){ spawnSpark(def.x, GROUND-90, 'block'); return; }
@@ -441,13 +478,16 @@
     // combo + dégressivité des dégâts (damage scaling façon Ikemen GO)
     att.combo = (att.comboT>0 ? att.combo : 0) + 1;
     att.comboT = 60;
+    const broke = comboBreak(att, def);
     const scale = att.combo<=1 ? 1 : Math.max(0.30, 1 - (att.combo-1)*0.11);
     const dmg = Math.max(1, Math.round(m.dmg * att.power / def.defense * scale));
 
     def.hp -= dmg; def.flash = 6;
     def.vx = m.kb*(-def.facing);
     if(m.launch){ def.vy = -9; def.onGround=false; }
-    def.stun = m.hitstun; setState(def,'hitstun'); def.buffer=[]; def.cmd?.reset();
+    // le dégagement raccourcit l'encaissement : le défenseur reprend la main
+    def.stun = broke ? Math.min(m.hitstun, 8) : m.hitstun;
+    setState(def,'hitstun'); def.buffer=[]; def.cmd?.reset();
     def.combo = 0; def.comboT = 0;
     att.meter = Math.min(100, att.meter + m.meter);
     def.meter = Math.min(100, def.meter + Math.round(m.meter*0.4));
@@ -485,13 +525,15 @@
 
     att.combo = (att.comboT > 0 ? att.combo : 0) + 1;
     att.comboT = 60;
+    const broke = comboBreak(att, def);
     const scale = att.combo <= 1 ? 1 : Math.max(0.30, 1 - (att.combo-1)*0.11);
     const dmg = Math.max(1, Math.round(hd.damage * scaleHp * att.power / def.defense * scale));
 
     def.hp -= dmg; def.flash = 6;
     if(def.onGround){
       def.vx = (hd.groundVelX * 1.45) * (-def.facing);   // recul net, mais sans casser la portée
-      def.stun = hd.hitTime || 12;
+      // le dégagement raccourcit l'encaissement : le défenseur reprend la main
+      def.stun = broke ? 8 : (hd.hitTime || 12);
       if(hd.fall || hd.groundType === 'Trip'){ def.vy = hd.airVelY || -6; def.onGround = false; }
     } else {
       def.vx = (hd.airVelX/2) * (-def.facing);
@@ -503,7 +545,9 @@
     att.meter = clampN(att.meter + (hd.givePower[0] ? hd.givePower[0]/30 : 6), 0, 100);
     def.meter = clampN(def.meter + 3, 0, 100);
     // pausetime du HitDef → hitstop, comme dans MUGEN
-    att.vx += 1.3 * (-att.facing);                       // léger contrecoup
+    // Léger contrecoup — sauf sur une charge : le coq est lancé, il ne doit
+    // pas repartir en arrière au moment où il touche.
+    if(!att.move?.dash) att.vx += 1.3 * (-att.facing);
     if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
     // La charge garde son gros impact même quand c'est le .cns qui frappe.
     if(att.move?.splash) splash((def.x + att.x)/2, GROUND - 80);
@@ -739,6 +783,7 @@
     } else if(f.r.mugen){
       half = 26 * (f.r.scale || 1);
     }
+    half *= f.scaleMul || 1;      // un colosse occupe la place de sa taille
     f.pushHalfCache = Math.max(10, half);
     return f.pushHalfCache;
   }
@@ -775,7 +820,7 @@
     const frame = f.anim && f.anim.current();
     const raw = frame && (kind === 'hit' ? frame.hit : frame.hurt);
     if(!raw || !raw.length) return null;
-    const sc = f.r.scale || 1;
+    const sc = (f.r.scale || 1) * (f.scaleMul || 1);
     return raw.map(b => {
       const x1 = f.facing > 0 ? b.x1 : -b.x2;
       const x2 = f.facing > 0 ? b.x2 : -b.x1;
@@ -846,21 +891,28 @@
       return out;
     }
     const lvl = e.aiLevel; // 0..1 agressivité/skill
+    // Les seuils suivent l'écart réellement imposé par les pushbox. En dur,
+    // des distances fixes laissaient l'IA coincée dans une zone où elle
+    // n'attaquait presque jamais : elle approchait et sautait dans le vide.
+    const near = (pushHalf(e) + pushHalf(p)) * 1.75;
+    const far  = near * 1.9;
     // bloque parfois si l'adversaire attaque proche
-    if(p.state==='attack' && dist<90 && Math.random()<0.25+0.4*lvl){ out[away]=true; return out; }
+    if(p.state==='attack' && dist<near*1.2 && Math.random()<0.18+0.35*lvl){ out[away]=true; return out; }
     if(e.aiT>0){ if(e.aiPlan) out[e.aiPlan]=true; return out; }
-    if(dist>120){ out[toward]=true; e.aiPlan=toward; e.aiT=10+Math.random()*20; }
-    else if(dist<70){
+    if(dist>far){ out[toward]=true; e.aiPlan=toward; e.aiT=10+Math.random()*20; }
+    else if(dist<near){
       const r=Math.random();
-      if(r<0.4+0.3*lvl){ out.light=true; e.aiPlan=null; e.aiT=8; }
-      else if(r<0.6+0.3*lvl){ out.kick=true; e.aiT=10; }
-      else if(r<0.72){ out.heavy=true; e.aiT=14; }
-      else if(r<0.8 && e.meter>=100){ out.special=true; e.aiT=20; }
+      if(r<0.40+0.30*lvl){ out.light=true; e.aiPlan=null; e.aiT=8; }
+      else if(r<0.60+0.30*lvl){ out.kick=true; e.aiT=10; }
+      else if(r<0.86){ out.heavy=true; e.aiT=14; }
+      else if(r<0.92 && e.meter>=100){ out.special=true; e.aiT=20; }
       else { out[away]=true; e.aiPlan=away; e.aiT=12; }
     } else {
+      // à mi-distance on ferme la garde et on frappe : plus de sauts perdus
       const r=Math.random();
-      if(r<0.5+0.2*lvl){ out[toward]=true; e.aiPlan=toward; e.aiT=8+Math.random()*12; }
-      else if(r<0.7){ out.heavy=true; e.aiT=16; }
+      if(r<0.42+0.18*lvl){ out[toward]=true; e.aiPlan=toward; e.aiT=6+Math.random()*8; }
+      else if(r<0.78+0.14*lvl){ out[toward]=true; out.heavy=true; e.aiT=14; }
+      else if(r<0.92){ out[toward]=true; out.kick=true; e.aiT=12; }
       else { out.up=true; e.aiT=18; }
     }
     return out;
@@ -879,7 +931,7 @@
     // démarrage de duel a créé. Sinon il traîne avec des stats de duel
     // (défense 1, donc increvable) et occupe une place à l'écran.
     fighters = [fighters[0]];
-    for(const e of S.POOL){
+    for(const e of [...S.POOL, ...S.GIANTS]){
       const r = RENDER[e.id]; if(!r || !r.mugen) continue;
       const key = `${e.id}#${e.pal ?? 'd'}#${e.skin ?? 'd'}`;
       if(!mugenCache[key]){
@@ -905,6 +957,12 @@
     // il descend la rue : il apparaît hors champ et marche vers la gauche
     f.x = VW + 30 + Math.random() * 40;
     f.facing = -1;
+    if(e.giant){
+      f.scaleMul = e.scale || 2;
+      f.giant = true;
+      banner(e.name, 'ko');
+      playBeep('ko');
+    }
     attachCns(f);
     fighters.push(f);
     return true;
@@ -917,8 +975,21 @@
     // Les Kung Fu ont une vraie animation « au sol » (bras le long du corps) :
     // bien plus propre que de faire pivoter le sprite debout.
     if(lie) f.anim?.play(window.ChickenMugen.ANIM.down ?? 5110, true);
-    street.corpses.push({ x:f.x, facing:f.facing, id:f.id,
-      anim:f.anim, lie, pool:0, t:0 });
+    // Seuls les Kung Fu restent un instant au sol. Les coqs s'effacent tout
+    // de suite : leur corps encombrait la rue et gênait la progression.
+    if(lie){
+      street.corpses.push({ x:f.x, facing:f.facing, id:f.id, scaleMul:f.scaleMul,
+        anim:f.anim, lie, pool:0, t:0 });
+    } else {
+      // il ne reste que la trace au sol
+      street.corpses.push({ x:f.x, facing:f.facing, id:f.id, anim:null,
+        lie:false, pool:0, t:0 });
+      for(let i=0;i<10;i++){
+        const a = Math.random()*Math.PI*2;
+        fx.push({ kind:'plume', x:f.x, y:GROUND-70, vx:Math.cos(a)*4, vy:Math.sin(a)*4-2,
+                  rot:Math.random()*6, r:3+Math.random()*3, t:0, life:26+Math.random()*18 });
+      }
+    }
     blood(f.x, GROUND - 60, 3);
     street.killed++;
     const drop = S.rollDrop();
@@ -1324,7 +1395,7 @@
       const fr = c.anim && c.anim.current();
       if(!fr) continue;
       const sp = fr.sprite;
-      const sc = (RENDER[c.id]?.scale) || 1.75;
+      const sc = ((RENDER[c.id]?.scale) || 1.75) * (c.scaleMul || 1);
       ctx.save();
       ctx.translate(c.x, GROUND);
       ctx.scale(c.facing*sc, sc);
@@ -1546,7 +1617,7 @@
   function drawMugenFighter(f){
     const frame = f.anim && f.anim.current();
     if(!frame){ return; }
-    const sc = f.r.scale || 1.5;
+    const sc = (f.r.scale || 1.5) * (f.scaleMul || 1);
     const s = frame.sprite, img = s.canvas;
     ctx.save();
     ctx.translate(f.x, GROUND);
@@ -1978,7 +2049,7 @@
       return fighters.map(f => ({
         id:f.id, hp:Math.round(f.hp), maxHp:f.maxHp, state:f.state,
         move:f.move?.name ?? null, st:f.st, anim:f.anim?.no ?? null,
-        pow:f.power, def:f.defense, combo:f.combo,
+        pow:f.power, def:f.defense, combo:f.combo, facing:f.facing, vx:Math.round(f.vx*10)/10, y:Math.round(f.y), giant:!!f.giant, invuln:f.invuln,
         cnsState:f.cns?.stateNo ?? null, hasCns:!!f.cns,
         hitDef:!!f.hitDef, meter:Math.round(f.meter), x:Math.round(f.x)
       }));

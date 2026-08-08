@@ -72,6 +72,19 @@
    * divisant la défense qu'on obtient ce qui est demandé : deux poings suffisent.
    */
   function pick(tier){
+    // Un colosse de temps en temps : deux fois plus grand, bien plus coriace,
+    // et il frappe fort. De quoi casser le rythme de la rue.
+    if(tier >= 2 && Math.random() < 0.11){
+      const g = GIANTS[Math.floor(Math.random() * GIANTS.length)];
+      return {
+        ...g,
+        hp:      120 + tier * 20,
+        defense: Math.min(0.42, 0.26 + tier * 0.02),   // ~6 à 8 coups
+        power:   1.5 + tier * 0.06,
+        ai:      Math.min(0.8, 0.34 + tier * 0.05),
+        giant:   true
+      };
+    }
     const e = POOL[Math.floor(Math.random() * POOL.length)];
     return {
       ...e,
@@ -81,6 +94,12 @@
       ai:      Math.min(0.85, 0.28 + tier * 0.06)
     };
   }
+
+  // Colosses : mêmes personnages, mais dessinés bien plus grands.
+  const GIANTS = [
+    { id:'kfm',        pal:2, skin:'ninja', scale:2.0, name:'NINJA GÉANT' },
+    { id:'reineMugen',              scale:2.0, name:'REINE GÉANTE' }
+  ];
 
   /** Palier de difficulté : il monte tous les six adversaires abattus. */
   const tierFor = killed => 1 + Math.floor(killed / 6);
@@ -139,6 +158,7 @@
 
   window.ChickenStreet = {
     WEAPONS, DROPS, POOL, MOODS, STREET_DECOR,
+    GIANTS,
     rollDrop, pick, tierFor, maxAlive, nextDelay, moodFor, liesDown, corpseAlpha,
     CORPSE_HOLD, CORPSE_FADE,
     /** Nombre de vies selon le statut du joueur. */
