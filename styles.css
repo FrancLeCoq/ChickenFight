@@ -384,7 +384,10 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
    Décor plein écran, commandes opaques superposées sur les côtés :
    on gagne toute la hauteur pour l'arène. */
 @media (orientation: landscape) and (max-height: 560px){
-  body{padding:0;overflow:hidden}
+  /* Les menus doivent rester défilables : en paysage ils dépassent presque
+     toujours de la hauteur d'écran. Seul le combat fige la page. */
+  body{padding:0}
+  body.fighting{overflow:hidden}
   .app{width:100%;max-width:none}
   .topbar{display:none}
   .realtime-screen.active{position:fixed;inset:0;z-index:5;padding:0;display:flex;flex-direction:column}

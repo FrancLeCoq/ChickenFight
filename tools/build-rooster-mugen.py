@@ -22,7 +22,7 @@ from PIL import Image, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, 'assets')
 OUT = os.path.join(ROOT, 'chars', 'francis')
-CANVAS = (170, 215)          # taille de travail des sprites
+CANVAS = (330, 330)          # large : les poses très inclinées doivent tenir
 SCALE = 0.215                # réduction depuis les sources 721x900
                              # (donne ~155x193, à l'échelle d'un perso MUGEN)
 
@@ -69,19 +69,34 @@ def compose(parts, head_rot=0.0, head_dx=0, head_dy=0, tail_rot=0.0,
                            center=(src_w*0.62, src_h*0.52))
     layer.alpha_composite(head, (int(head_dx), int(head_dy)))
 
+    # Pivot du corps : les pattes. C'est autour de lui qu'on fait tourner, et
+    # c'est lui qu'on repose toujours au même endroit.
+    piv = (src_w*0.5, src_h*0.92)
+
     if body_rot:
-        layer = layer.rotate(math.degrees(body_rot), resample=Image.BICUBIC,
-                             center=(src_w*0.5, src_h*0.92))
+        # Une rotation sans marge recadre sur la boîte d'origine : au-delà
+        # d'un quart de tour, le coq est tranché. On l'installe donc au
+        # centre d'un carré assez grand pour qu'il tourne librement.
+        r = int(math.hypot(max(piv[0], src_w - piv[0]),
+                           max(piv[1], src_h - piv[1]))) + 4
+        big = Image.new('RGBA', (2*r, 2*r), (0,0,0,0))
+        big.alpha_composite(layer, (r - int(piv[0]), r - int(piv[1])))
+        layer = big.rotate(math.degrees(body_rot), resample=Image.BICUBIC,
+                           center=(r, r))
+        piv = (r, r)
 
     # `stretch` élargit la silhouette : c'est ce qui distingue un coup d'aile
     # (le coq s'ouvre en largeur) d'un simple coup de bec (il se projette).
-    w = int(src_w*SCALE*stretch); h = int(src_h*SCALE*squash)
-    layer = layer.resize((w, h), Image.LANCZOS)
+    sx, sy = SCALE*stretch, SCALE*squash
+    lw, lh = layer.size
+    layer = layer.resize((max(1, int(lw*sx)), max(1, int(lh*sy))), Image.LANCZOS)
 
+    # Le pivot atterrit toujours au même point : la pose peut tourner autant
+    # qu'elle veut, le coq reste posé au sol et centré.
+    land_x = CANVAS[0]*0.5 + body_dx
+    land_y = CANVAS[1] - (src_h - src_h*0.92)*sy + body_dy
     out = Image.new('RGBA', CANVAS, (0,0,0,0))
-    ox = (CANVAS[0]-w)//2 + int(body_dx)
-    oy = CANVAS[1]-h + int(body_dy)
-    out.alpha_composite(layer, (ox, oy))
+    out.alpha_composite(layer, (int(land_x - piv[0]*sx), int(land_y - piv[1]*sy)))
     return out
 
 def build_poses(parts, rigged=True):

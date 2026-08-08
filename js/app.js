@@ -366,6 +366,9 @@
     if(push && currentScreen !== 'battle') screenStack.push(currentScreen);
     $$('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
     currentScreen = name;
+    // Seul le combat fige la page. En paysage, tout figer empêchait de
+    // dérouler les menus, qui ne tiennent pas dans la hauteur disponible.
+    document.body.classList.toggle('fighting', name === 'realtime');
     $('#backBtn').classList.toggle('hidden', name === 'menu' || name === 'battle' || name === 'realtime');
     updateScreenCaption();
     window.scrollTo({top:0,behavior:'instant'});
@@ -1014,10 +1017,14 @@
   // personnage : c'est la méthode MUGEN pour obtenir un roster visuellement
   // distinct à partir d'une seule banque de sprites.
 
+  // `edefMul` est le vrai levier de difficulté. Les dégâts d'un coup sont
+  // proportionnels aux PV max de la cible : gonfler `ehpMul` allonge la jauge
+  // ET les dégâts encaissés, donc ne change rien au nombre de coups à placer.
+  // C'est la défense qui décide de la résistance réelle de l'adversaire.
   const DIFFS = {
-    easy:   { label:'FACILE', ai:.18, ehpMul:.80, epowMul:.70, xpMul:1 },
-    medium: { label:'MOYEN',  ai:.45, ehpMul:1.0, epowMul:1.0, xpMul:2 },
-    hard:   { label:'DUR',    ai:.80, ehpMul:1.25, epowMul:1.35, xpMul:4 }
+    easy:   { label:'FACILE', ai:.18, ehpMul:.80, epowMul:.70, edefMul:.75, xpMul:1 },
+    medium: { label:'MOYEN',  ai:.50, ehpMul:1.0, epowMul:1.05, edefMul:1.25, xpMul:2 },
+    hard:   { label:'DUR',    ai:.88, ehpMul:1.25, epowMul:1.28, edefMul:1.8, xpMul:4 }
   };
 
   // Décors : ambiances de scène passées au moteur.
@@ -1202,7 +1209,8 @@
       enemySkin: enemy.skin,
       playerName:'COQ FU MAN', enemyName: enemy.name.toUpperCase(),
       playerStats:{ hp:210, power:1, defense:1 },
-      enemyStats:{ hp:Math.round(enemy.hp * d.ehpMul), power:enemy.pow * d.epowMul, defense:1, ai:d.ai },
+      enemyStats:{ hp:Math.round(enemy.hp * d.ehpMul), power:enemy.pow * d.epowMul,
+                   defense:d.edefMul, ai:d.ai },
       time:60, best:2,
       onEnd: rtOnEnd
     });
