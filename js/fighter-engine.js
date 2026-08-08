@@ -252,8 +252,13 @@
     if(freezeT>0){ freezeT--; updateFx(); return; }
     round.stateT++;
     if(street){ gameFrame++; stepStreet(); return; }
-    if(round.state==='intro'){ if(round.stateT>70){ round.state='fight'; round.stateT=0; banner('COMBAT !','fight'); } return; }
-    if(round.state==='ko' || round.state==='win'){ if(round.stateT>150) nextRound(); return; }
+    // Décompte avant reprise : une reprise sèche après un K.O. ne laisse pas
+    // le temps de reprendre la manette.
+    if(round.state==='intro'){
+      if(round.stateT>INTRO_FRAMES){ round.state='fight'; round.stateT=0; banner('COMBAT !','fight'); }
+      return;
+    }
+    if(round.state==='ko' || round.state==='win'){ if(round.stateT>110) nextRound(); return; }
     if(round.state!=='fight') return;
 
     // timer
@@ -564,8 +569,12 @@
   // dans le common1.cns du moteur, pas dans le fichier du personnage.
   const CNS_ATTACKS = { peck:200, wing:210, kick:230, heavy:240, dp:1000, qcb:1010, super:3000, egg:1000,
     jumpkick:640, uppercut:1000, pirouette:430,
-    // 1050 = Kung Fu Knee (genou sauté), 1400 = Kung Fu Zankou (charge)
-    somersault:1050, charge:1400 };
+    // 1050 = Kung Fu Knee (genou sauté).
+    // Charge : 1200 (Kung Fu Blow) et non 1400 (Zankou). Le Zankou lève le
+    // bras EN ARRIÈRE au-dessus de la tête — à l'écran, on ne voyait pas de
+    // coup partir. Le Blow est une fente bras tendus vers l'avant : le geste
+    // se lit immédiatement. C'est le sens de la gestuelle qui est corrigé.
+    somersault:1050, charge:1200 };
 
   function makeCnsHost(f){
     return {
@@ -1087,6 +1096,60 @@
     else street.spawnT = 40;
   }
 
+  /**
+   * Colères du ciel. Un fléau s'annonce (le ciel gronde), puis frappe :
+   *   éclair  — flash aveuglant, tout ce qui traîne dans la rue y passe ;
+   *   tempête — une bourrasque balaie l'écran et emporte les adversaires.
+   * Le joueur, lui, est secoué mais épargné : ce n'est pas une punition.
+   */
+  function stepHazard(){
+    const S = window.ChickenStreet;
+    street.sinceHazard++;
+    const h = street.hazard;
+    if(!h){
+      const next = S.rollHazard(street.mood, street.sinceHazard);
+      if(next){
+        street.hazard = { ...next, t:0 };
+        street.sinceHazard = 0;
+        banner(next.name, 'ko');
+        playBeep('boom');
+      }
+      return;
+    }
+    h.t++;
+    if(h.t === h.warn){
+      // le fléau frappe
+      if(h.id === 'bolt'){
+        fx.push({ kind:'bolt', t:0, life:26, x:VW*0.25 + Math.random()*VW*0.5 });
+        shake(20);
+        for(const e of fighters.slice()){
+          if(e === fighters[0]) continue;
+          e.hp = 0; streetKill(e);
+        }
+        playBeep('boom');
+      } else {
+        // la bourrasque part d'un bord et traverse
+        h.dir = Math.random() < 0.5 ? 1 : -1;
+        h.x = h.dir > 0 ? -60 : VW + 60;
+      }
+    }
+    if(h.id === 'storm' && h.t > h.warn){
+      h.x += h.dir * 5.5;
+      for(const e of fighters.slice(1)){
+        if(Math.abs(e.x - h.x) < 90){
+          e.vx = h.dir * 13; e.vy = -7; e.onGround = false;
+          e.stun = 30; setState(e, 'hitstun');
+          if(e.x < -40 || e.x > VW + 40){ e.hp = 0; streetKill(e); }
+        }
+      }
+      // le joueur est bousculé, pas emporté
+      const p = fighters[0];
+      if(p && Math.abs(p.x - h.x) < 90) p.vx += h.dir * 1.4;
+      if(h.x < -140 || h.x > VW + 140) h.t = h.life + h.warn;
+    }
+    if(h.t > h.life + h.warn) street.hazard = null;
+  }
+
   /** Boucle propre au mode Street. */
   function stepStreet(){
     const p = fighters[0];
@@ -1127,6 +1190,7 @@
 
     // Arrivées continues : ils descendent la rue un par un, parfois
     // presque collés. Plus de vagues, donc plus de temps mort.
+    stepHazard();
     streetSpawner();
     // mort du joueur
     if(p.hp <= 0){
@@ -1154,6 +1218,7 @@
   }
 
   // ══════════════ ROUNDS ══════════════
+  const INTRO_FRAMES = 165;      // 3 · 2 · 1 puis « COMBAT ! »
   function koFighter(loser, winner){
     setState(loser,'ko'); loser.vx = 5*(-loser.facing); loser.vy=-6; loser.onGround=false;
     round.state='ko'; round.stateT=0; const wi = winner.side; round.wins[wi]++;
@@ -1184,7 +1249,7 @@
   function banner(text,tone){ fx.push({kind:'banner',text,tone,t:0,life:tone==='move'?40:70}); }
   /** Gerbe de gouttes de sang à l'impact — plus lisible qu'un flash plein. */
   function blood(x, y, power=1){
-    const n = Math.min(14, 4 + Math.round(power*6));
+    const n = Math.min(8, 3 + Math.round(power*3));
     for(let i=0;i<n;i++){
       fx.push({ kind:'blood', x, y,
         vx:(Math.random()-0.5)*6*power, vy:-(1.5+Math.random()*4)*power,
@@ -1192,7 +1257,7 @@
     }
   }
   /** Voile sanglant sur tout l'écran (K.O.). */
-  function bloodScreen(){ fx.push({ kind:'bloodscreen', t:0, life:110 }); }
+  function bloodScreen(){ fx.push({ kind:'bloodscreen', t:0, life:70 }); }
   function popCombo(f){ fx.push({kind:'combo',side:f.side,n:f.combo,t:0,life:50}); }
   // Gel cinématique au déclenchement d'un super (hitstop global).
   /**
@@ -1217,6 +1282,16 @@
                 r:2.5+Math.random()*3, t:0, life:30+Math.random()*16 });
     }
     shake(10); playBeep('boom');
+  }
+  // Dégradés plein écran : identiques d'une image à l'autre, donc construits
+  // une seule fois. Les recréer à chaque frame était du travail pur perdu.
+  let _bloodGrad = null, _skyGrad = null;
+  function bloodGradient(){
+    if(_bloodGrad) return _bloodGrad;
+    _bloodGrad = ctx.createRadialGradient(VW/2,VH/2,VH*0.2, VW/2,VH/2,VH*0.85);
+    _bloodGrad.addColorStop(0,'rgba(120,0,10,0)');
+    _bloodGrad.addColorStop(1,'rgba(140,0,12,1)');
+    return _bloodGrad;
   }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
   /** Gros impact de la charge : onde de choc, éclats et plumes arrachées. */
@@ -1243,15 +1318,22 @@
     // cela, des coups très répétés accumulent des centaines de particules
     // et la scène se met à ramer.
     fx = fx.filter(o => o.t < o.life);
-    if(fx.length > 160) fx = fx.slice(-160);
+    // Plafond volontairement bas : chaque particule est un tracé alpha, et
+    // c'est la rastérisation — pas notre JS — qui coûte cher sur mobile.
+    if(fx.length > 90) fx = fx.slice(-90);
     ChickenArena._shake *= 0.86;
   }
 
   // ══════════════ RENDER ══════════════
+  // Chronométrage du rendu, activable par _test.profile(true). Sert à situer
+  // les ralentissements section par section plutôt qu'à l'estime.
+  let prof = null;
   function render(){
+    const t0 = prof ? performance.now() : 0;
     const sx = (Math.random()-0.5)*ChickenArena._shake, sy=(Math.random()-0.5)*ChickenArena._shake;
     ctx.setTransform(cv.width/VW,0,0,cv.height/VH, sx, sy);
     drawStage();
+    const t1 = prof ? performance.now() : 0;
     drawStreetProps();
     // ombres
     fighters.forEach(f=>{ ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, GROUND+4, 40, 9, 0,0,7); ctx.fill(); });
@@ -1264,16 +1346,26 @@
     // Les arcs de coup passent APRÈS tout le monde : sinon le combattant
     // dessiné ensuite recouvre l'arc de son adversaire et le coup ne se voit pas.
     order.forEach(drawSwipe);
+    const t2 = prof ? performance.now() : 0;
     projectiles.forEach(drawEgg);
     drawFx();
+    const t3 = prof ? performance.now() : 0;
     drawHud();
+    if(prof){
+      const t4 = performance.now();
+      prof.stage += t1-t0; prof.chars += t2-t1; prof.fx += t3-t2; prof.hud += t4-t3;
+      prof.total += t4-t0; prof.n++;
+    }
   }
 
   function drawStage(){
     const D = (opts && opts.decor) || { sky:'#3a2568', sky2:'#4a2f7a', ground:'#6b4423', ground2:'#3d2712' };
-    const g = ctx.createLinearGradient(0,0,0,VH);
-    g.addColorStop(0,D.sky); g.addColorStop(0.62,D.sky2); g.addColorStop(0.62,D.ground); g.addColorStop(1,D.ground2);
-    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+    if(!_skyGrad){
+      _skyGrad = ctx.createLinearGradient(0,0,0,VH);
+      _skyGrad.addColorStop(0,D.sky); _skyGrad.addColorStop(0.62,D.sky2);
+      _skyGrad.addColorStop(0.62,D.ground); _skyGrad.addColorStop(1,D.ground2);
+    }
+    ctx.fillStyle=_skyGrad; ctx.fillRect(0,0,VW,VH);
     // foule
     ctx.fillStyle='rgba(255,255,255,.06)'; ctx.fillRect(0,VH*0.32,VW,18);
     // sol
@@ -1405,6 +1497,7 @@
       ctx.drawImage(sp.canvas, -sp.x + fr.x, -sp.y + fr.y);
       ctx.restore();
     }
+    drawHazard();
     for(const it of street.pickups){
       it.bob = Math.sin(gameFrame*0.09 + it.x)*4;
       const w = window.ChickenStreet.WEAPONS[it.w];
@@ -1416,6 +1509,41 @@
       ctx.fillText(w.icon, it.x, it.y + it.bob);
       ctx.restore();
     }
+  }
+
+  /** Annonce puis passage du fléau : le ciel prévient avant de frapper. */
+  function drawHazard(){
+    const h = street?.hazard;
+    if(!h) return;
+    if(h.t < h.warn){
+      // avertissement : le ciel s'assombrit et pulse
+      const k = h.t / h.warn;
+      ctx.save();
+      ctx.globalAlpha = 0.10 + 0.28 * k * (0.6 + 0.4*Math.sin(h.t*0.45));
+      ctx.fillStyle = h.id === 'bolt' ? '#9db8ff' : '#5b6b8a';
+      ctx.fillRect(0, 0, VW, VH);
+      ctx.restore();
+      return;
+    }
+    if(h.id !== 'storm' || h.x == null) return;
+    // bourrasque : voile incliné et traînées horizontales
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    const g = ctx.createLinearGradient(h.x - 110, 0, h.x + 110, 0);
+    g.addColorStop(0, 'rgba(190,205,230,0)');
+    g.addColorStop(0.5, 'rgba(210,222,244,.55)');
+    g.addColorStop(1, 'rgba(190,205,230,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(h.x - 110, 0, 220, VH);
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let i = 0; i < 9; i++){
+      const y = 24 + i*36 + ((gameFrame*3 + i*17) % 30);
+      const x0 = h.x - 100 + ((gameFrame*9 + i*61) % 200);
+      ctx.moveTo(x0, y); ctx.lineTo(x0 + 46*h.dir, y + 5);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
@@ -1792,6 +1920,29 @@
         ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x,o.y,r*0.5,0,7); ctx.fill();
         ctx.restore();
       }
+      if(o.kind==='bolt'){
+        const k = o.t/o.life;
+        ctx.save();
+        // flash aveuglant qui retombe vite
+        ctx.globalAlpha = Math.max(0, 1 - k*1.9);
+        ctx.fillStyle = '#eaf2ff';
+        ctx.fillRect(0, 0, VW, VH);
+        // la foudre elle-même, en zigzag
+        ctx.globalAlpha = Math.max(0, 1 - k*1.3);
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        let bx = o.x, by = 0;
+        ctx.moveTo(bx, by);
+        for(let i = 0; i < 7; i++){
+          bx += (Math.sin(i*2.3 + o.x) * 26);
+          by += GROUND/7;
+          ctx.lineTo(bx, by);
+        }
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(180,210,255,.7)'; ctx.lineWidth = 14;
+        ctx.stroke();
+        ctx.restore();
+      }
       if(o.kind==='plume'){
         const k = o.t/o.life;
         ctx.save();
@@ -1828,18 +1979,20 @@
         const k = o.t/o.life;
         ctx.save();
         ctx.globalAlpha = Math.min(0.62, (1-k)*0.9);
-        const g = ctx.createRadialGradient(VW/2,VH/2,VH*0.2, VW/2,VH/2,VH*0.85);
-        g.addColorStop(0,'rgba(120,0,10,0)'); g.addColorStop(1,'rgba(140,0,12,1)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
-        // coulures depuis le haut
+        ctx.fillStyle = bloodGradient();
+        ctx.fillRect(0,0,VW,VH);
+        // Coulures depuis le haut. Un seul tracé pour l'ensemble : dix
+        // beginPath/fill séparés par image coûtaient plus que le dessin.
         ctx.globalAlpha = Math.min(0.75, (1-k));
         ctx.fillStyle='#8b0011';
-        for(let i=0;i<10;i++){
-          const x = (i*67 + 23) % VW;
+        ctx.beginPath();
+        for(let i=0;i<6;i++){
+          const x = (i*109 + 23) % VW;
           const h = 26 + ((i*37)%54) + Math.min(70, o.t*1.6);
-          ctx.fillRect(x, 0, 7, h);
-          ctx.beginPath(); ctx.arc(x+3.5, h, 4.5, 0, 7); ctx.fill();
+          ctx.rect(x, 0, 7, h);
+          ctx.moveTo(x+8, h); ctx.arc(x+3.5, h, 4.5, 0, 7);
         }
+        ctx.fill();
         ctx.restore();
       }
       if(o.kind==='flashscreen'){
@@ -1858,7 +2011,32 @@
     }
   }
 
+  /** Décompte plein écran avant la reprise : 3 · 2 · 1. */
+  function drawCountdown(){
+    if(round.state !== 'intro') return;
+    const left = INTRO_FRAMES - round.stateT;
+    const n = Math.ceil(left / (INTRO_FRAMES / 3));
+    if(n < 1) return;
+    // chaque chiffre enfle puis se stabilise : on voit qu'il change
+    const inStep = (INTRO_FRAMES / 3) - (left % (INTRO_FRAMES / 3));
+    const k = Math.min(1, inStep / 12);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.35 + 0.65 * k;
+    ctx.font = `bold ${Math.round(96 * (1.6 - 0.6*k))}px Bangers,Fredoka,sans-serif`;
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+    ctx.strokeText(n, VW/2, VH*0.44);
+    ctx.fillStyle = '#ffd54a';
+    ctx.fillText(n, VW/2, VH*0.44);
+    ctx.globalAlpha = 0.9;
+    ctx.font = 'bold 17px Bangers,Fredoka,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.fillText(`ROUND ${round.n}`, VW/2, VH*0.44 - 62);
+    ctx.restore();
+  }
+
   function drawHud(){
+    drawCountdown();
     if(street){ drawStreetHud(); return; }
     const M = 16, W = 244, TOP = 30;      // marge haute : lisible même rogné
     // Fond du bandeau : détache le HUD du décor.
@@ -1989,7 +2167,9 @@
     if(delta > 250){ delta = DT; acc = 0; ChickenArena.resetTouch(); keyState = {}; keyLatch = {}; }
     acc = Math.min(acc + delta, DT * 5);
     let guard = 0;
+    const ts0 = prof ? performance.now() : 0;
     while(acc >= DT && guard < 5){ step(); acc -= DT; guard++; }
+    if(prof){ prof.step += performance.now() - ts0; prof.steps += guard; }
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -1999,6 +2179,7 @@
     _touch: blankInput(), _shake:0, muted:false,
     async start(o){
       opts=o; cv=o.canvas; ctx=cv.getContext('2d');
+      _bloodGrad = _skyGrad = null;   // dégradés liés au contexte : on repart à neuf
       preload([o.playerId, o.enemyId]);
       await preloadMugen([o.playerId, o.enemyId]);
       await preloadHeadOverlay([o.playerId, o.enemyId]);
@@ -2011,7 +2192,8 @@
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       street = o.mode === 'street' ? {
         tier:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
-        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0, scroll:0
+        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0, scroll:0,
+        hazard:null, sinceHazard:0
       } : null;
       if(street) await preloadStreetPool();
       running=true; last=0; acc=0;
@@ -2037,9 +2219,15 @@
       place(i, x){ if(fighters[i]) fighters[i].x = x; },
       attack(i, move){ if(fighters[i]) startAttack(fighters[i], move); },
       kill(){ fighters.slice(1).forEach(f => { f.hp = 0; }); },
+      profile(on){
+        if(!on){ const r = prof; prof = null; return r; }
+        prof = { stage:0, chars:0, fx:0, hud:0, total:0, n:0, step:0, steps:0 };
+      },
       boxes(i, kind){ return fighters[i] ? clsnBoxes(fighters[i], kind) : null; }
     },
     /** État interne, pour le diagnostic et les tests. */
+    /** Nombre d'effets en vol : utile pour traquer les ralentissements. */
+    fxCount(){ return fx.length; },
     /** Avancée du joueur dans la rue (mode Street), en unités monde. */
     streetInfo(){
       return street ? { scroll:Math.round(street.scroll), tier:street.tier, alive:fighters.length-1,

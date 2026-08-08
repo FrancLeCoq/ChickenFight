@@ -1187,6 +1187,13 @@
   }
 
   // ── Combat ──
+  /** Intitulé du bouton d'attaque légère, selon qui se bat. */
+  function setLightLabel(playerId){
+    const beak = playerId !== 'coqfu' && playerId !== 'kfm' && playerId !== 'kfm720';
+    const el = $('#btnLightLabel');
+    if(el) el.textContent = beak ? 'BEC' : 'POING';
+  }
+
   function startFight(){
     closeRotate();
     if(!window.ChickenArena){ toast('Moteur indisponible'); return; }
@@ -1198,6 +1205,9 @@
     const playerId = rtMode === 'rooster' ? (rtOpponent?.id || 'coqfu') : 'coqfu';
 
     $('#rtLadderBadge').textContent = `${d.label} — ${enemy.name.toUpperCase()}`;
+    // Coq Fu Man se bat avec un corps d'humain : il donne des poings, pas des
+    // coups de bec. Les vrais coqs gardent leur bec.
+    setLightLabel(playerId);
     ChickenArena.muted = !soundEnabled;
     ChickenArena.resetTouch();
     rtActive = true;
@@ -1307,6 +1317,7 @@
     $('#rtLadderBadge').textContent = `LA STREET — ${lives} VIE${lives>1?'S':''}`;
     ChickenArena.muted = !soundEnabled;
     ChickenArena.resetTouch();
+    setLightLabel('coqfu');
     showScreen('realtime');
     ChickenArena.start({
       canvas: $('#rtCanvas'),

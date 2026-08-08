@@ -403,7 +403,10 @@ h1{font-family:"Bangers",cursive;font-size:52px;letter-spacing:3px;line-height:.
     padding:0 12px calc(10px + env(safe-area-inset-bottom));pointer-events:none;background:none}
   .rt-pad{position:absolute;left:14px;bottom:12px;width:132px;height:132px;opacity:.82;pointer-events:auto}
   .rt-buttons{position:absolute;right:14px;bottom:12px;width:150px;height:150px;opacity:.86;pointer-events:auto}
-  .rt-dir,.rt-atk{backdrop-filter:blur(3px)}
+  /* Pas de backdrop-filter ici : ces boutons flottent au-dessus d'un canvas
+     qui se redessine 60 fois par seconde, et le flou de fond doit alors être
+     recalculé à chaque image. Mesuré sur un combat : ~25 % du temps de frame
+     pour un effet à peine visible. */
 }
 .overlay{position:fixed;inset:0;z-index:50;background:rgba(4,1,12,.84);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:22px}
 .overlay.show{display:flex;animation:fade .2s ease}
