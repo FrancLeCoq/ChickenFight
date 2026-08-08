@@ -96,16 +96,19 @@
   }
 
   // Colosses : mêmes personnages, mais dessinés bien plus grands.
+  // 2.0 débordait de l'écran : la scène ne fait que 360 unités de haut et un
+  // Kung Fu Man y occupe déjà ~190. 1,45 se voit très bien sans être coupé.
   const GIANTS = [
-    { id:'kfm',        pal:2, skin:'ninja', scale:2.0, name:'NINJA GÉANT' },
-    { id:'reineMugen',              scale:2.0, name:'REINE GÉANTE' }
+    { id:'kfm', pal:2, skin:'ninja', scale:1.45, name:'NINJA GÉANT' },
+    { id:'reineMugen',              scale:1.45, name:'REINE GÉANTE' }
   ];
 
   /** Palier de difficulté : il monte tous les six adversaires abattus. */
   const tierFor = killed => 1 + Math.floor(killed / 6);
 
   /** Combien d'adversaires au maximum en même temps à l'écran. */
-  const maxAlive = tier => Math.min(4, 1 + Math.ceil(tier / 2));
+  // Trois adversaires au maximum : au-delà, l'écran est illisible.
+  const maxAlive = tier => Math.min(3, 1 + Math.ceil(tier / 2));
 
   /**
    * Délai avant l'arrivée suivante, en frames.
@@ -146,6 +149,28 @@
   const CORPSE_HOLD = 60;    // frames avant le clignotement
   const CORPSE_FADE = 70;    // frames de clignotement / disparition
 
+  // ── Colères du ciel ────────────────────────────────────────────
+  // De loin en loin, la rue s'en mêle. Deux fléaux, jamais coup sur coup.
+  //   éclair  : la foudre tombe, énorme flash, tout le monde y passe
+  //   tempête : une bourrasque traverse l'écran et emporte les corps
+  const HAZARDS = {
+    bolt:  { id:'bolt',  name:'ÉCLAIR !',  warn:52, life:46 },
+    storm: { id:'storm', name:'TEMPÊTE !', warn:64, life:200 }
+  };
+  const HAZARD_MIN_GAP = 60 * 26;    // au moins 26 s entre deux fléaux
+
+  /**
+   * Faut-il déclencher un fléau ? Il en faut un ciel qui s'y prête (orage ou
+   * pluie), de la marge depuis le précédent, et un peu de chance.
+   */
+  function rollHazard(mood, sinceLast){
+    if(sinceLast < HAZARD_MIN_GAP) return null;
+    const stormy = mood && (mood.weather === 'storm' || mood.weather === 'rain');
+    if(!stormy) return null;
+    if(Math.random() > 0.006) return null;
+    return Math.random() < 0.5 ? HAZARDS.bolt : HAZARDS.storm;
+  }
+
   /** Opacité d'un corps à l'instant t, ou 0 s'il a fini de disparaître. */
   function corpseAlpha(t){
     if(t < CORPSE_HOLD) return 1;
@@ -158,8 +183,8 @@
 
   window.ChickenStreet = {
     WEAPONS, DROPS, POOL, MOODS, STREET_DECOR,
-    GIANTS,
-    rollDrop, pick, tierFor, maxAlive, nextDelay, moodFor, liesDown, corpseAlpha,
+    GIANTS, HAZARDS,
+    rollDrop, rollHazard, pick, tierFor, maxAlive, nextDelay, moodFor, liesDown, corpseAlpha,
     CORPSE_HOLD, CORPSE_FADE,
     /** Nombre de vies selon le statut du joueur. */
     livesFor: holder => holder ? 10 : 1

@@ -41,8 +41,9 @@
 
 [Begin Action 230]    ; coup de patte
 230,0, 0,0, 4
-230,1, 0,0, 6
-230,2, 0,0, 5
+230,1, 0,0, 4
+230,2, 0,0, 6
+230,3, 0,0, 5
 
 [Begin Action 430]    ; pirouette (bas + patte)
 430,0, 0,0, 3

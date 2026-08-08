@@ -139,11 +139,17 @@ def build_poses(parts, rigged=True):
                          head_rot=-0.36, stretch=1.32, squash=0.86)
     P[(210,2)] = compose(parts, body_rot=0.12, body_dx=10, tail_rot=0.18,
                          stretch=1.12, squash=0.95)
-    # 230 — coup de patte : détente vers le bas puis extension haute et étirée
-    P[(230,0)] = compose(parts, body_rot=-0.06, squash=0.84, stretch=1.08, body_dy=6)
-    P[(230,1)] = compose(parts, body_rot=0.24, body_dx=30, body_dy=-18,
-                         squash=1.18, stretch=0.90, tail_rot=0.34)
-    P[(230,2)] = compose(parts, body_rot=0.10, body_dx=12, body_dy=-6, squash=1.05)
+    # 230 — coup de patte. Un simple sautillement ne se lisait pas : un coq
+    # frappe en basculant en arrière, pattes lancées vers l'avant. La bascule
+    # (rotation positive) est donc franche et l'appui part loin devant.
+    P[(230,0)] = compose(parts, body_rot=0.16, squash=0.80, stretch=1.10,
+                         body_dy=8, tail_rot=-0.20, head_rot=0.10)
+    P[(230,1)] = compose(parts, body_rot=0.58, body_dx=28, body_dy=-10,
+                         squash=0.94, stretch=1.24, tail_rot=0.30, head_rot=0.22)
+    P[(230,2)] = compose(parts, body_rot=0.80, body_dx=48, body_dy=-6,
+                         squash=0.90, stretch=1.30, tail_rot=0.42, head_rot=0.30)
+    P[(230,3)] = compose(parts, body_rot=0.30, body_dx=18, body_dy=0,
+                         squash=1.00, stretch=1.10, tail_rot=0.16)
     # 5000 — touché
     P[(5000,0)] = compose(parts, body_rot=0.22, body_dx=-12, head_rot=0.36, tail_rot=0.30)
     # 5110 — au sol (K.O.)
@@ -175,9 +181,11 @@ def build_poses_simple(parts):
     P[(210,0)] = compose(parts, body_rot=-0.28, body_dx=-12, stretch=0.86, squash=1.06)
     P[(210,1)] = compose(parts, body_rot=0.32, body_dx=30, stretch=1.36, squash=0.84)
     P[(210,2)] = compose(parts, body_rot=0.12, body_dx=12, stretch=1.14, squash=0.94)
-    P[(230,0)] = compose(parts, body_rot=-0.06, squash=0.82, stretch=1.10, body_dy=6)
-    P[(230,1)] = compose(parts, body_rot=0.26, body_dx=32, body_dy=-20, squash=1.20, stretch=0.88)
-    P[(230,2)] = compose(parts, body_rot=0.10, body_dx=14, body_dy=-6, squash=1.06)
+    # coup de patte : bascule en arrière, pattes projetées vers l'avant
+    P[(230,0)] = compose(parts, body_rot=0.18, squash=0.78, stretch=1.12, body_dy=8)
+    P[(230,1)] = compose(parts, body_rot=0.60, body_dx=30, body_dy=-10, squash=0.92, stretch=1.26)
+    P[(230,2)] = compose(parts, body_rot=0.84, body_dx=50, body_dy=-6, squash=0.88, stretch=1.32)
+    P[(230,3)] = compose(parts, body_rot=0.32, body_dx=18, body_dy=0, squash=1.00, stretch=1.10)
     P[(5000,0)] = compose(parts, body_rot=0.26, body_dx=-16)
     P[(5110,0)] = compose(parts, body_rot=1.25, body_dy=26, squash=0.9)
     P.update(build_specials(parts))
@@ -368,8 +376,9 @@ AIR = """; Francis Le Coq — animations (numéros standard MUGEN)
 
 [Begin Action 230]    ; coup de patte
 230,0, 0,0, 4
-230,1, 0,0, 6
-230,2, 0,0, 5
+230,1, 0,0, 4
+230,2, 0,0, 6
+230,3, 0,0, 5
 
 [Begin Action 430]    ; pirouette (bas + patte)
 430,0, 0,0, 3
