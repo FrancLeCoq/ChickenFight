@@ -255,6 +255,12 @@
     // Décompte avant reprise : une reprise sèche après un K.O. ne laisse pas
     // le temps de reprendre la manette.
     if(round.state==='intro'){
+      // Les combattants respirent en garde pendant le décompte. Sans cela,
+      // step() sortait avant toute animation et ils restaient figés sur leur
+      // dernière image du round précédent — le vaincu encore au sol.
+      gameFrame++;
+      fighters.forEach(f => { f.st++; updateMugenAnim(f); });
+      updateFx();
       if(round.stateT>INTRO_FRAMES){ round.state='fight'; round.stateT=0; banner('COMBAT !','fight'); }
       return;
     }
@@ -611,10 +617,15 @@
       setHitDef(hd){ f.hitDef = hd; f.hitDefUsed = false; },
       // ── effets visuels / de scène pilotés par le .cns ──
       palFx(o){ f.palFx = { t:o.time, add:o.add, mul:o.mul, invert:o.invert }; },
-      envShake(time, ampl){ shakeStage(Math.min(2, ampl/8)); },
+      // EnvShake : secousse de scène demandée par le .cns. Appelait
+      // shakeStage(), qui n'a jamais existé — toute image déclenchant un
+      // EnvShake levait une ReferenceError et figeait le combat.
+      envShake(time, ampl){ shake(Math.min(16, Math.abs(ampl || 2) * 1.6)); },
       envColor(rgb, time){ fx.push({ kind:'flashscreen', rgb, t:0, life:Math.max(2,time) }); },
       pause(time){ freeze(Math.min(60, time)); },
-      dust(pos){ dust(f.side === 0 ? 'player' : 'enemy'); },
+      // Idem : cette méthode s'appelait elle-même par un nom qui ne
+      // résolvait sur rien. Elle crache maintenant une vraie poussière.
+      dust(){ dustPuff(f.x, GROUND); },
       afterImage(time){ f.afterImage = time; },
       // ── effets sur l'adversaire ──
       targetLife(v){ const o = other(f); if(o) o.hp = clampN(o.hp + v*(o.maxHp/1000), 0, o.maxHp); },
@@ -1023,12 +1034,33 @@
     street.pickups = street.pickups.filter(i => !i.taken);
   }
 
-  /** Tir de l'arme ramassée (touche ŒUF/super réutilisée). */
+  const POWER_HOLD = 22;   // ~0,36 s d'appui sur ŒUF pour sortir l'avantage
+
+  /** Tir de l'arme ramassée (appui long sur ŒUF). */
   function streetFire(p){
     const w = p.weapon;
     if(!w || w.ammo <= 0 || p.wCool > 0) return false;
     p.wCool = w.cooldown;
     w.ammo--;
+    if(w.power){
+      // Les fléaux du ciel, mais déclenchés par le joueur et à son avantage.
+      banner(`${w.icon} ${w.name} !`, 'ko');
+      if(w.id === 'bolt'){
+        fx.push({ kind:'bolt', t:0, life:26, x:VW*0.3 + Math.random()*VW*0.4 });
+        shake(20); playBeep('boom');
+        for(const e of fighters.slice()){
+          if(e === fighters[0]) continue;
+          e.hp = 0; streetKill(e);
+        }
+      } else {
+        // la bourrasque part du coq et balaie devant lui
+        street.hazard = { ...window.ChickenStreet.HAZARDS.storm, t:64, warn:64,
+                          dir:p.facing, x:p.x + 40*p.facing };
+        playBeep('boom');
+      }
+      p.weapon = null;
+      return true;
+    }
     if(w.projectile){
       projectiles.push({ x:p.x + 26*p.facing, y:GROUND - 78,
         vx:w.speed * p.facing, owner:p, life:120, rot:0,
@@ -1162,8 +1194,15 @@
     else if(p.wasHit){ p.wasHit = false; p.invuln = Math.max(p.invuln, 26); }
 
     const pin = readInput();
-    // la touche du coup fatal sert aussi à tirer quand une arme est en main
-    if(pin.super && p.weapon){ streetFire(p); pin.super = false; }
+    // ŒUF sert aussi à sortir l'arme ou le pouvoir ramassé — mais en APPUI
+    // LONG. Une simple tape déclenchait l'avantage par inadvertance, alors
+    // qu'un éclair ou une tempête ne s'utilisent qu'une fois.
+    if(pin.super) p.superHold = (p.superHold || 0) + 1;
+    else p.superHold = 0;
+    if(p.weapon){
+      if(p.superHold === POWER_HOLD) streetFire(p);
+      pin.super = false;                 // pas de super tant qu'on a un avantage
+    }
     updateFighter(p, pin, nearest(p) || p);
     updateCns(p, nearest(p) || p);
     scrollStreet(p);
@@ -1292,6 +1331,15 @@
     _bloodGrad.addColorStop(0,'rgba(120,0,10,0)');
     _bloodGrad.addColorStop(1,'rgba(140,0,12,1)');
     return _bloodGrad;
+  }
+  /** Petite poussière au sol, demandée par certains états .cns. */
+  function dustPuff(x, y){
+    for(let i=0;i<5;i++){
+      fx.push({ kind:'plume', x:x + (Math.random()-0.5)*22, y:y - 4,
+                vx:(Math.random()-0.5)*2.4, vy:-(0.6+Math.random()*1.4),
+                rot:Math.random()*6, r:2+Math.random()*2.2,
+                t:0, life:16+Math.random()*12 });
+    }
   }
   function popDamage(x,y,d){ fx.push({kind:'dmg',x,y,d,t:0,life:40}); }
   /** Gros impact de la charge : onde de choc, éclats et plumes arrachées. */
@@ -2081,7 +2129,13 @@
       ctx.font='bold 15px Fredoka,sans-serif'; ctx.fillStyle='#ffd54a';
       ctx.fillText(`${p.weapon.icon} ${p.weapon.name}  ×${p.weapon.ammo}`, VW-16, 30);
       ctx.font='9px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
-      ctx.fillText('touche ŒUF pour utiliser', VW-16, 48);
+      ctx.fillText('APPUI LONG sur ŒUF', VW-16, 48);
+      // jauge d'appui : on voit le pouvoir se charger sous le doigt
+      if(p.superHold > 0){
+        const k = Math.min(1, p.superHold / POWER_HOLD);
+        ctx.fillStyle = k >= 1 ? '#4ade80' : '#ffd54a';
+        ctx.fillRect(VW-16-90*k, 54, 90*k, 3);
+      }
     } else {
       ctx.font='10px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.5)';
       ctx.fillText('aucune arme — ramasse ce qui tombe', VW-16, 34);
@@ -2168,11 +2222,22 @@
     acc = Math.min(acc + delta, DT * 5);
     let guard = 0;
     const ts0 = prof ? performance.now() : 0;
-    while(acc >= DT && guard < 5){ step(); acc -= DT; guard++; }
-    if(prof){ prof.step += performance.now() - ts0; prof.steps += guard; }
-    render();
+    // Une exception ici tuait la boucle : requestAnimationFrame n'était plus
+    // rappelé et le jeu se figeait pour de bon, manette comprise. On isole
+    // donc l'image fautive, on la signale, et on continue à la suivante.
+    try{
+      while(acc >= DT && guard < 5){ step(); acc -= DT; guard++; }
+      if(prof){ prof.step += performance.now() - ts0; prof.steps += guard; }
+      render();
+    }catch(err){
+      acc = 0;
+      faults++;
+      console.error('[ChickenArena] image ignorée après erreur:', err);
+      if(faults === 1 && opts?.onFault) opts.onFault(err);
+    }
     raf = requestAnimationFrame(frame);
   }
+  let faults = 0;   // nombre d'images perdues sur erreur, pour le diagnostic
 
   // ══════════════ API PUBLIQUE ══════════════
   const ChickenArena = {
@@ -2188,7 +2253,7 @@
       fighters=[ makeFighter(o.playerId,0,P), makeFighter(o.enemyId,1,{...E, ai:E.ai}) ];
       fighters.forEach(attachCns);
       gameFrame = 0;
-      projectiles=[]; fx=[]; keyState={}; keyLatch={}; this._touch=blankInput(); this._shake=0;
+      projectiles=[]; fx=[]; keyState={}; keyLatch={}; this._touch=blankInput(); this._shake=0; faults=0;
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       street = o.mode === 'street' ? {
         tier:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
@@ -2219,6 +2284,7 @@
       place(i, x){ if(fighters[i]) fighters[i].x = x; },
       attack(i, move){ if(fighters[i]) startAttack(fighters[i], move); },
       kill(){ fighters.slice(1).forEach(f => { f.hp = 0; }); },
+      give(id){ const w = window.ChickenStreet.WEAPONS[id]; if(w && fighters[0]) fighters[0].weapon = { ...w, ammo:w.ammo }; },
       profile(on){
         if(!on){ const r = prof; prof = null; return r; }
         prof = { stage:0, chars:0, fx:0, hud:0, total:0, n:0, step:0, steps:0 };
@@ -2228,6 +2294,15 @@
     /** État interne, pour le diagnostic et les tests. */
     /** Nombre d'effets en vol : utile pour traquer les ralentissements. */
     fxCount(){ return fx.length; },
+    /** Arme ou pouvoir en main du joueur, pour l'état du bouton ŒUF. */
+    heldWeapon(){
+      const w = fighters[0]?.weapon;
+      return w ? { id:w.id, icon:w.icon, name:w.name, ammo:w.ammo, power:!!w.power } : null;
+    },
+    /** Compteur d'images du moteur : sert à détecter un gel. */
+    frameNo(){ return gameFrame; },
+    /** Images perdues sur erreur depuis le début du combat. */
+    faultCount(){ return faults; },
     /** Avancée du joueur dans la rue (mode Street), en unités monde. */
     streetInfo(){
       return street ? { scroll:Math.round(street.scroll), tier:street.tier, alive:fighters.length-1,
