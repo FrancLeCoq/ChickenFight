@@ -1371,9 +1371,15 @@
     setInterval(() => {
       const btn = $('#eggBtn');
       if(!btn || !rtActive || !window.ChickenArena?.playerMeter) return;
-      const ready = window.ChickenArena.playerMeter() >= 100;
+      // Le bouton s'allume aussi quand un avantage est en main : il sert
+      // alors à le déclencher, par un appui long.
+      const held = window.ChickenArena.heldWeapon?.() || null;
+      const ready = window.ChickenArena.playerMeter() >= 100 || !!held;
       btn.disabled = !ready;
       btn.classList.toggle('ready', ready);
+      const lbl = btn.querySelector('b');
+      if(lbl) lbl.textContent = held ? held.name : 'ŒUF';
+      btn.firstChild.textContent = held ? held.icon : '🥚';
     }, 200);
     $$('#diffRow .diff-btn').forEach(b => b.addEventListener('click', () => {
       rtDiff = b.dataset.diff; renderDiff();

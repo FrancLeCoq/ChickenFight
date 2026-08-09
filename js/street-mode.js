@@ -34,15 +34,27 @@
       id:'eggs', name:'ŒUFS', icon:'🥚', ammo:10,
       dmg:26, projectile:true, speed:8, cooldown:20, explodes:true,
       desc:'Explose à l\'impact, touche large'
+    },
+    // Pouvoirs du ciel, à usage unique : ce sont les fléaux de la rue, mais
+    // retournés contre elle. On les déclenche par un appui long sur ŒUF.
+    bolt: {
+      id:'bolt', name:'ÉCLAIR', icon:'⚡', ammo:1, power:true, cooldown:40,
+      desc:'La foudre balaie toute la rue'
+    },
+    storm: {
+      id:'storm', name:'TEMPÊTE', icon:'🌪️', ammo:1, power:true, cooldown:40,
+      desc:'Une bourrasque emporte tout devant toi'
     }
   };
 
   // Table de butin : ce qui peut tomber d'un ennemi vaincu.
   const DROPS = [
-    { w:null,     chance:0.55 },   // rien, le plus souvent
-    { w:'eggs',   chance:0.22 },
-    { w:'sword',  chance:0.15 },
-    { w:'pistol', chance:0.08 }    // le plus rare : c'est le combo ultime
+    { w:null,     chance:0.52 },   // rien, le plus souvent
+    { w:'eggs',   chance:0.20 },
+    { w:'sword',  chance:0.14 },
+    { w:'pistol', chance:0.07 },
+    { w:'storm',  chance:0.04 },
+    { w:'bolt',   chance:0.03 }    // le plus rare : la foudre
   ];
 
   function rollDrop(){
