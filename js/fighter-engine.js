@@ -887,7 +887,12 @@
       if(target && overlap({x:pr.x-12,y:pr.y-12,w:24,h:24}, hurtbox(target))){
         eggBoom(pr.x, pr.y); const blocking = target.state==='block'||target.blockHold;
         const base = pr.weapon ? pr.weapon.dmg : 28;
-        const dmg = blocking?4:Math.round(base*pr.owner.power/target.defense);
+        // Les dégâts d'une ARME sont absolus : les diviser par la défense
+        // (0,05 dans la rue, pour que deux poings suffisent) les multipliait
+        // par vingt — un œuf infligeait plus de 600 points.
+        const dmg = blocking ? 4
+          : Math.round(pr.weapon ? base * pr.owner.power
+                                 : base * pr.owner.power / target.defense);
         target.hp -= dmg; target.flash=8; if(!blocking){ target.vx=8*(-target.facing); target.stun=22; setState(target,'hitstun'); }
         shake(12); popDamage(target.x,GROUND-120,dmg); pr.life=0;
       }
@@ -959,7 +964,7 @@
         catch{ continue; }
       }
     }
-    street.spawnT = 40;
+    street.nextAt = 120;      // les premiers pas avant la première rencontre
     round.state = 'fight';
   }
 
@@ -1119,13 +1124,15 @@
       street.mood = S.moodFor(tier);
       street.corpses = street.corpses.slice(-6);
     }
-    if(street.spawnT > 0){ street.spawnT--; return; }
     const alive = fighters.length - 1;
-    // On laisse toujours passer quelqu'un quand la rue est vide, sinon on
-    // respecte le plafond : c'est ce qui garde le combat lisible.
-    if(alive >= S.maxAlive(tier)){ street.spawnT = 20; return; }
-    if(spawnStreetEnemy()) street.spawnT = S.nextDelay(tier);
-    else street.spawnT = 40;
+    if(alive >= S.maxAlive(tier)) return;   // l'écran est plein, on attend
+
+    // C'est l'AVANCÉE qui peuple la rue, pas une horloge. Tant que le joueur
+    // reste sur place, la rue reste calme : on ne lui envoie personne dans le
+    // dos. Il croise du monde parce qu'il descend la rue, pas parce qu'il
+    // patiente.
+    if(street.scroll < street.nextAt) return;
+    if(spawnStreetEnemy()) street.nextAt = street.scroll + S.nextGap(tier);
   }
 
   /**
@@ -1200,7 +1207,12 @@
     if(pin.super) p.superHold = (p.superHold || 0) + 1;
     else p.superHold = 0;
     if(p.weapon){
-      if(p.superHold === POWER_HOLD) streetFire(p);
+      // Appui long réservé aux pouvoirs à usage unique (éclair, tempête) :
+      // on ne les gâche pas sur une tape involontaire. Les armes ordinaires
+      // — épée, œufs, pistolet — partent à la première pression, sans quoi
+      // on a l'impression que le bouton ne répond pas.
+      if(p.weapon.power){ if(p.superHold === POWER_HOLD) streetFire(p); }
+      else if(p.superHold === 1) streetFire(p);
       pin.super = false;                 // pas de super tant qu'on a un avantage
     }
     updateFighter(p, pin, nearest(p) || p);
@@ -2129,7 +2141,7 @@
       ctx.font='bold 15px Fredoka,sans-serif'; ctx.fillStyle='#ffd54a';
       ctx.fillText(`${p.weapon.icon} ${p.weapon.name}  ×${p.weapon.ammo}`, VW-16, 30);
       ctx.font='9px Fredoka,sans-serif'; ctx.fillStyle='rgba(255,255,255,.7)';
-      ctx.fillText('APPUI LONG sur ŒUF', VW-16, 48);
+      ctx.fillText(p.weapon.power ? 'MAINTENIR ŒUF' : 'touche ŒUF', VW-16, 48);
       // jauge d'appui : on voit le pouvoir se charger sous le doigt
       if(p.superHold > 0){
         const k = Math.min(1, p.superHold / POWER_HOLD);
@@ -2257,8 +2269,8 @@
       round={ n:1, wins:[0,0], timer:(o.time||60)*FPS, state:'intro', stateT:0, best:o.best||2 };
       street = o.mode === 'street' ? {
         tier:1, lives:o.lives||1, corpses:[], pickups:[], killed:0,
-        mood: window.ChickenStreet.moodFor(1), spawnT:0, banner:0, scroll:0,
-        hazard:null, sinceHazard:0
+        mood: window.ChickenStreet.moodFor(1), banner:0, scroll:0,
+        hazard:null, sinceHazard:0, nextAt:120
       } : null;
       if(street) await preloadStreetPool();
       running=true; last=0; acc=0;
@@ -2294,6 +2306,7 @@
     /** État interne, pour le diagnostic et les tests. */
     /** Nombre d'effets en vol : utile pour traquer les ralentissements. */
     fxCount(){ return fx.length; },
+    projCount(){ return projectiles.length; },
     /** Arme ou pouvoir en main du joueur, pour l'état du bouton ŒUF. */
     heldWeapon(){
       const w = fighters[0]?.weapon;

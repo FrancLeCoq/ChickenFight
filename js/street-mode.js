@@ -123,14 +123,16 @@
   const maxAlive = tier => Math.min(3, 1 + Math.ceil(tier / 2));
 
   /**
-   * Délai avant l'arrivée suivante, en frames.
-   * Ils descendent la rue un par un — mais une fois sur trois le suivant
-   * colle au précédent, histoire qu'on tombe parfois sur un petit groupe.
+   * Distance à parcourir avant la prochaine rencontre, en unités monde.
+   *
+   * C'est l'avancée du joueur qui peuple la rue, pas le temps qui passe :
+   * on croise du monde parce qu'on descend la rue. Une fois sur trois, le
+   * suivant est juste derrière — on tombe alors sur un petit groupe.
    */
-  function nextDelay(tier){
-    if(Math.random() < 0.34) return 18 + Math.random() * 24;   // presque collé
-    const base = Math.max(55, 135 - tier * 10);
-    return base + Math.random() * 60;
+  function nextGap(tier){
+    if(Math.random() < 0.34) return 20 + Math.random() * 45;   // presque collés
+    const base = Math.max(150, 340 - tier * 22);
+    return base + Math.random() * 180;
   }
 
   /**
@@ -196,7 +198,7 @@
   window.ChickenStreet = {
     WEAPONS, DROPS, POOL, MOODS, STREET_DECOR,
     GIANTS, HAZARDS,
-    rollDrop, rollHazard, pick, tierFor, maxAlive, nextDelay, moodFor, liesDown, corpseAlpha,
+    rollDrop, rollHazard, pick, tierFor, maxAlive, nextGap, moodFor, liesDown, corpseAlpha,
     CORPSE_HOLD, CORPSE_FADE,
     /** Nombre de vies selon le statut du joueur. */
     livesFor: holder => holder ? 10 : 1
