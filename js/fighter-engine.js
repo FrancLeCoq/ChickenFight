@@ -250,6 +250,7 @@
   function step(){
     // hitstop / gel cinématique du super : la scène se fige, les FX continuent
     if(freezeT>0){ freezeT--; updateFx(); return; }
+    if(freezeSpent > 0) freezeSpent--;   // le budget d'arrêt se reconstitue
     round.stateT++;
     if(street){ gameFrame++; stepStreet(); return; }
     // Décompte avant reprise : une reprise sèche après un K.O. ne laisse pas
@@ -379,7 +380,7 @@
     if(f.cns && startCnsAttack(f, moveName)){
       if(MOVES[moveName]?.label) banner(MOVES[moveName].label, MOVES[moveName].super?'super':'move');
       if(MOVES[moveName]?.super){
-        freezeSuper(14);                 // court : lisible sans bloquer le jeu
+        freezeSuper(10);                 // court : lisible sans bloquer le jeu
         superEggBarrage(f);              // l'effet attendu : une volée d'œufs
       }
       return;
@@ -390,7 +391,7 @@
     // saut périlleux : le coq décolle vraiment
     if(f.move.leap){ f.vx = f.move.leap.x * f.facing; f.vy = f.move.leap.y; f.onGround = false; }
     if(f.move.label) banner(f.move.label, f.move.super?'super':'move');
-    if(f.move.super){ freezeSuper(14); superEggBarrage(f); playBeep('super'); }
+    if(f.move.super){ freezeSuper(10); superEggBarrage(f); playBeep('super'); }
     else if(f.move.special) playBeep('special');
   }
   function runAttack(f, opp){
@@ -559,7 +560,7 @@
     // Léger contrecoup — sauf sur une charge : le coq est lancé, il ne doit
     // pas repartir en arrière au moment où il touche.
     if(!att.move?.dash) att.vx += 1.3 * (-att.facing);
-    if(hd.pauseTime > 0) freeze(Math.min(6, hd.pauseTime));
+    if(hd.pauseTime > 0) freeze(Math.min(3, hd.pauseTime));
     // La charge garde son gros impact même quand c'est le .cns qui frappe.
     if(att.move?.splash) splash((def.x + att.x)/2, GROUND - 80);
     blood(def.x, GROUND - 95, Math.min(2, dmg/12));
@@ -622,7 +623,9 @@
       // EnvShake levait une ReferenceError et figeait le combat.
       envShake(time, ampl){ shake(Math.min(16, Math.abs(ampl || 2) * 1.6)); },
       envColor(rgb, time){ fx.push({ kind:'flashscreen', rgb, t:0, life:Math.max(2,time) }); },
-      pause(time){ freeze(Math.min(60, time)); },
+      // SuperPause vaut 30 images par défaut dans MUGEN — une demi-seconde
+      // d'arrêt, en plus de tout le reste. On garde l'effet, pas la durée.
+      pause(time){ freeze(Math.min(6, time)); },
       // Idem : cette méthode s'appelait elle-même par un nom qui ne
       // résolvait sur rien. Elle crache maintenant une vraie poussière.
       dust(){ dustPuff(f.x, GROUND); },
@@ -884,8 +887,10 @@
       const target = pr.owner === fighters[0]
         ? fighters.slice(1).find(f => Math.abs(f.x - pr.x) < 40)
         : fighters[0];
+      if(target && pr.hitList?.includes(target)) continue;   // déjà transpercé
       if(target && overlap({x:pr.x-12,y:pr.y-12,w:24,h:24}, hurtbox(target))){
-        eggBoom(pr.x, pr.y); const blocking = target.state==='block'||target.blockHold;
+        if(!pr.weapon?.blade) eggBoom(pr.x, pr.y);
+        const blocking = target.state==='block'||target.blockHold;
         const base = pr.weapon ? pr.weapon.dmg : 28;
         // Les dégâts d'une ARME sont absolus : les diviser par la défense
         // (0,05 dans la rue, pour que deux poings suffisent) les multipliait
@@ -894,9 +899,19 @@
           : Math.round(pr.weapon ? base * pr.owner.power
                                  : base * pr.owner.power / target.defense);
         target.hp -= dmg; target.flash=8; if(!blocking){ target.vx=8*(-target.facing); target.stun=22; setState(target,'hitstun'); }
-        shake(12); popDamage(target.x,GROUND-120,dmg); pr.life=0;
+        shake(12); popDamage(target.x,GROUND-120,dmg);
+        if(pr.weapon?.blade){
+          // la lame poursuit sa course et peut embrocher le suivant
+          (pr.hitList ||= []).push(target);
+          blood(target.x, GROUND-95, 2.2);
+        } else {
+          pr.life = 0;
+        }
       }
-      if(pr.x<WALL||pr.x>VW-WALL){ eggBoom(pr.x,pr.y); pr.life=0; }
+      if(pr.x<WALL||pr.x>VW-WALL){
+        if(!pr.weapon?.blade) eggBoom(pr.x,pr.y); else playBeep('hit');
+        pr.life=0;
+      }
     }
     projectiles = projectiles.filter(p=>p.life>0);
   }
@@ -1318,10 +1333,21 @@
    */
   function freeze(frames){
     if(freezeT > 0) return;                 // déjà figé : on n'empile pas
-    freezeT = Math.min(20, Math.max(0, frames));
+    if(freezeSpent > FREEZE_BUDGET) return; // trop d'arrêts récents : on laisse courir
+    freezeT = Math.min(12, Math.max(0, frames));
+    freezeSpent += freezeT;
   }
+  // Budget d'arrêt sur image. Un super cumulait notre gel de mise en scène,
+  // le SuperPause du .cns (30 images par défaut) et le pausetime de CHAQUE
+  // touche : mesuré, le moteur n'avançait que de 21 images en 2 secondes.
+  // Le jeu ne ramait pas — il était à l'arrêt. Ce budget borne l'ensemble.
+  const FREEZE_BUDGET = 18;
+  let freezeSpent = 0;
   /** Gel long réservé aux supers, qui doivent rester spectaculaires. */
-  function freezeSuper(frames){ freezeT = Math.min(45, Math.max(freezeT, frames)); }
+  function freezeSuper(frames){
+    freezeT = Math.min(10, Math.max(freezeT, frames));
+    freezeSpent += freezeT;
+  }
   function spawnSpark(x,y,type){ fx.push({kind:'spark',x,y,type,t:0,life:14}); if(type==='hit')playBeep('hit'); }
   function eggBoom(x,y){
     fx.push({kind:'boom',x,y,t:0,life:34});
@@ -1915,6 +1941,25 @@
 
   /** Œuf en vol : coquille dessinée + traînée lumineuse, bien visible. */
   function drawEgg(pr){
+    if(pr.weapon && pr.weapon.blade){
+      // épée lancée : elle tournoie, pointe en avant
+      const dir = Math.sign(pr.vx) || 1;
+      ctx.save();
+      ctx.globalAlpha = .3; ctx.strokeStyle = '#dfe7f5'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pr.x - pr.vx*3, pr.y); ctx.lineTo(pr.x, pr.y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.translate(pr.x, pr.y); ctx.rotate(pr.rot * 1.6);
+      ctx.fillStyle = '#e8eef8'; ctx.strokeStyle = '#8895ab'; ctx.lineWidth = 1.5;
+      ctx.beginPath();                        // lame
+      ctx.moveTo(20*dir, 0); ctx.lineTo(2*dir, -3.5);
+      ctx.lineTo(-10*dir, -2.5); ctx.lineTo(-10*dir, 2.5); ctx.lineTo(2*dir, 3.5);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#8a5a2b';               // poignée
+      ctx.fillRect(-17*dir, -2, 7*dir, 4);
+      ctx.fillStyle = '#c9a227';               // garde
+      ctx.fillRect(-11*dir, -6, 2.5*dir, 12);
+      ctx.restore(); return;
+    }
     if(pr.weapon && pr.weapon.id === 'pistol'){
       ctx.save();
       ctx.strokeStyle='#ffe9a8'; ctx.lineWidth=3; ctx.lineCap='round';
