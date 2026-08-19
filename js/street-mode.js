@@ -6,10 +6,10 @@
      • on progresse dans une ville sombre, vague après vague ;
      • le coq est bien plus résistant que les adversaires, qui tombent
        en quelques coups ;
-     • 1 vie pour les non-holders, 10 vies pour les holders ;
+     • 1 vie pour les non-holders, 4 vies pour les holders ;
      • les ennemis abattus restent au sol, allongés dans une mare de sang ;
      • on ramasse parfois une arme à munitions limitées :
-         pistolet (le combo ultime), épée, ou réserve d'œufs.
+         pistolet (le combo ultime), épées à lancer, ou réserve d'œufs.
 
    Ce fichier décrit les DONNÉES et les règles ; le moteur
    (fighter-engine.js) s'en sert pour piloter le combat.
@@ -25,10 +25,12 @@
       dmg:60, projectile:true, speed:13, cooldown:16,
       desc:'Abat presque n\'importe qui d\'une balle'
     },
+    // L'épée se LANCE : la frappe au corps à corps ne se voyait pas et
+    // donnait l'impression que le bouton ne faisait rien.
     sword: {
-      id:'sword', name:'ÉPÉE', icon:'⚔️', ammo:14,
-      dmg:34, reach:96, cooldown:22,
-      desc:'Longue portée, tranche en un coup ou deux'
+      id:'sword', name:'ÉPÉE', icon:'⚔️', ammo:6,
+      dmg:45, projectile:true, speed:11, blade:true, cooldown:18,
+      desc:'Se lance droit devant et transperce'
     },
     eggs: {
       id:'eggs', name:'ŒUFS', icon:'🥚', ammo:10,
@@ -200,7 +202,18 @@
     GIANTS, HAZARDS,
     rollDrop, rollHazard, pick, tierFor, maxAlive, nextGap, moodFor, liesDown, corpseAlpha,
     CORPSE_HOLD, CORPSE_FADE,
-    /** Nombre de vies selon le statut du joueur. */
-    livesFor: holder => holder ? 10 : 1
+    /** Nombre de vies selon le statut du joueur, plafonné à 4. */
+    livesFor: holder => holder ? 4 : 1,
+    /** Meilleur score d'éliminations, conservé sur l'appareil. */
+    bestKills(){
+      const v = parseInt(localStorage.getItem('flc_streetBest') || '0', 10);
+      return isNaN(v) ? 0 : v;
+    },
+    /** Enregistre le score s'il bat le record. Renvoie true si c'est le cas. */
+    saveKills(n){
+      if(!(n > this.bestKills())) return false;
+      try{ localStorage.setItem('flc_streetBest', String(n)); }catch{}
+      return true;
+    }
   };
 })();

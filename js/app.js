@@ -1333,15 +1333,27 @@
     setTimeout(()=>toast('🌃 Bienvenue dans La Street. Ramasse ce qui tombe.'), 900);
   }
 
+  /** Affiche le record d'éliminations sur le bouton du menu. */
+  function renderStreetBest(){
+    const el = $('#streetSub'); if(!el) return;
+    const best = window.ChickenStreet?.bestKills?.() || 0;
+    el.textContent = best > 0
+      ? `Record : ${best} ennemi${best>1?'s':''} éliminé${best>1?'s':''}`
+      : 'Ville sombre — avance, ramasse, survis';
+  }
+
   function streetOnEnd(r){
     rtActive = false;
     const gain = Math.round(r.killed * 12 + r.wave * 25);
     profile.xp += gain; profile.feathers += Math.round(gain/4);
     saveProfile(); renderProfile();
+    const record = window.ChickenStreet.saveKills(r.killed);
+    renderStreetBest();
     playSound('lose'); haptic('error');
-    showModal(`<div style="font-size:52px">🌃</div>
-      <h2>FIN DE PARCOURS</h2>
+    showModal(`<div style="font-size:52px">${record ? '🏆' : '🌃'}</div>
+      <h2>${record ? 'NOUVEAU RECORD !' : 'FIN DE PARCOURS'}</h2>
       <p>Tu as descendu <b>${r.metres ?? 0} m</b> de rue et laissé <b>${r.killed}</b> corps derrière toi.</p>
+      ${record ? '' : `<p style="font-size:12px;color:var(--muted);margin-top:-6px">Ton record : <b>${window.ChickenStreet.bestKills()}</b></p>`}
       <div class="reward-line"><span class="reward-chip">+${gain} XP</span><span class="reward-chip">🪶 +${Math.round(gain/4)}</span></div>
       <div class="modal-actions">
         <button class="modal-btn green" data-modal-action="streetRetry">RETOURNER DANS LA RUE</button>
@@ -1507,7 +1519,7 @@
   }
 
   function init(){
-    initTelegram(); bindEvents(); applyLanguage(); renderCampaign(); renderArena(); renderDuel(); renderProfile(); renderAccessState(); detectHolder(); initPwa();
+    initTelegram(); bindEvents(); applyLanguage(); renderCampaign(); renderArena(); renderDuel(); renderProfile(); renderStreetBest(); renderAccessState(); detectHolder(); initPwa();
   }
 
   document.addEventListener('DOMContentLoaded',init);
